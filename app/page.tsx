@@ -51,7 +51,7 @@ export default function Home() {
       <div className="services flex flex-col items-center h-120 ">
         <h2 className="text-4xl font-bold">Services</h2>
         <div className="cards ">
-          <div></div>
+          <div>harry</div>
         </div>
       </div>
       <div className="gallery">
