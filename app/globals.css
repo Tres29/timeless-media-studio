@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+body {
+    margin: 0;
+}
+    .nav-header {
+        position: sticky;
+        top: 0;
+        /* z-index: 100; */
+    }
+
+    .hero-section {
+        background-image: url("/images/camera.png");
+        background-size: cover;
+        background-position: center; /* Sinisiguro na laging nasa gitna ang focus */
+        background-repeat: no-repeat;
+        min-height: 100vh; /* Para sakop ang buong screen */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
