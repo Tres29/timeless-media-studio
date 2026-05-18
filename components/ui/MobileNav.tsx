@@ -8,8 +8,8 @@ import { MdOutlineMonochromePhotos } from "react-icons/md";
 
 const navLinks = [
     { name: "Home", href: "/" },
-    { name: "About", href: "#about" },
-    { name: "Gallery", href: "#gallery" },
+    { name: "About", href: "/#about" },
+    { name: "Gallery", href: "/#gallery" },
     { name: "Tracking Order", href: "/api" },
 ];
 

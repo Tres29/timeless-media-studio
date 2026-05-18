@@ -1,177 +1,196 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { BookingStatus } from '@/lib/supabase/types';
 
-const CONTACT_KEY = 'contactSubmissions';
-const BOOKING_KEY = 'adminBookingLogs';
-
-type LogStatus =
-  | 'pending'
-  | 'approved'
-  | 'in_process'
-  | 'for_pick_up'
-  | 'completed';
-
-type ContactLog = {
+type BookingLog = {
   id: string;
   name: string;
   phone: string;
-  date: string;
-  packageType: string;
-  message: string;
   email: string;
-  timestamp: string;
-  confirmationNumber?: string;
-  status?: LogStatus;
+  email_provider?: string | null;
+  booking_date: string;
+  package_type: string;
+  message?: string | null;
+  confirmation_number: string;
+  status: BookingStatus;
+  created_at: string;
+  updated_at?: string | null;
 };
 
-type BookingLog = ContactLog;
+const statusOptions: BookingStatus[] = [
+  'approved',
+  'in_process',
+  'for_pick_up',
+  'completed',
+  'cancelled',
+];
 
 export default function AdminPanel() {
   const router = useRouter();
 
-  const [contactLogs, setContactLogs] = useState<ContactLog[]>([]);
   const [bookingLogs, setBookingLogs] = useState<BookingLog[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const loadData = () => {
-    const contacts = JSON.parse(localStorage.getItem(CONTACT_KEY) || '[]');
-    const bookings = JSON.parse(localStorage.getItem(BOOKING_KEY) || '[]');
+  const loadData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/bookings', { cache: 'no-store' });
 
-    const normalize = (arr: any[]) =>
-      Array.isArray(arr)
-        ? [...arr].reverse().map((x) => ({
-            ...x,
-            status: x.status || 'pending',
-          }))
-        : [];
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to load bookings.');
+      }
 
-    setContactLogs(normalize(contacts));
-    setBookingLogs(normalize(bookings));
-  };
+      const data = (await response.json()) as BookingLog[];
+
+      setBookingLogs(data);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load bookings.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof document === 'undefined') return;
 
-    const auth = localStorage.getItem('adminAuthenticated');
+    const isAuthenticated = document.cookie
+      .split('; ')
+      .some((cookie) => cookie === 'adminAuthenticated=true');
 
-    if (auth !== 'true') {
+    if (!isAuthenticated) {
       router.push('/admin/login');
       return;
     }
 
-    loadData();
-    setLoading(false);
+    const runInitialLoad = async () => {
+      await loadData();
+    };
 
-    const interval = setInterval(loadData, 2000);
-    return () => clearInterval(interval);
-  }, [router]);
+    void runInitialLoad();
 
-  const updateStorage = (key: string, data: ContactLog[]) => {
-    localStorage.setItem(key, JSON.stringify(data));
-    loadData();
+    const interval = window.setInterval(() => {
+      void loadData();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+
+  }, [loadData, router]);
+
+  const updateStatus = async (id: string, status: BookingStatus) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, status }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to update booking status.');
+      }
+
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update booking.');
+    }
   };
 
-  const updateStatus = (
-    id: string,
-    type: 'contact' | 'booking',
-    status: LogStatus
-  ) => {
-    const key = type === 'contact' ? CONTACT_KEY : BOOKING_KEY;
-    const rawData = JSON.parse(localStorage.getItem(key) || '[]') as ContactLog[];
-
-    const updated = rawData.map((item) =>
-      item.id === id ? { ...item, status } : item
-    );
-
-    updateStorage(key, updated);
+  const reinstateBooking = async (id: string) => {
+    await updateStatus(id, 'pending');
   };
 
-  const remove = (id: string, type: 'contact' | 'booking') => {
-    const key = type === 'contact' ? CONTACT_KEY : BOOKING_KEY;
-    const rawData = JSON.parse(localStorage.getItem(key) || '[]') as ContactLog[];
+  const remove = async (id: string) => {
+    try {
+      const response = await fetch(`/api/bookings?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
 
-    const updated = rawData.filter((item) => item.id !== id);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to delete booking.');
+      }
 
-    updateStorage(key, updated);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete booking.');
+    }
   };
 
-  const filterLogs = (logs: ContactLog[]) => {
+  const filteredBookingLogs = useMemo(() => {
     const q = search.toLowerCase().trim();
 
-    if (!q) return logs;
+    if (!q) return bookingLogs;
 
-    return logs.filter((log) =>
-      log.confirmationNumber?.toLowerCase().includes(q) ||
-      log.name?.toLowerCase().includes(q) ||
-      log.phone?.toLowerCase().includes(q)
+    return bookingLogs.filter(
+      (log) =>
+        log.confirmation_number?.toLowerCase().includes(q) ||
+        log.name?.toLowerCase().includes(q) ||
+        log.phone?.toLowerCase().includes(q) ||
+        log.email?.toLowerCase().includes(q)
     );
-  };
-
-  const filteredContactLogs = filterLogs(contactLogs);
-  const filteredBookingLogs = filterLogs(bookingLogs);
+  }, [bookingLogs, search]);
 
   const formatDate = (d: string) => {
     if (!d) return 'No date';
     return new Date(d).toLocaleString();
   };
 
-  const statusLabel = (status?: LogStatus) => {
+  const statusLabel = (status?: BookingStatus) => {
     if (status === 'approved') return 'Approved';
     if (status === 'in_process') return 'In Process';
     if (status === 'for_pick_up') return 'For Pick Up';
     if (status === 'completed') return 'Completed';
+    if (status === 'cancelled') return 'Cancelled';
     return 'Pending';
   };
 
-  const statusClass = (status?: LogStatus) => {
+  const statusClass = (status?: BookingStatus) => {
     if (status === 'approved') return 'bg-green-600';
     if (status === 'in_process') return 'bg-blue-600';
     if (status === 'for_pick_up') return 'bg-purple-600';
     if (status === 'completed') return 'bg-gray-600';
+    if (status === 'cancelled') return 'bg-red-600';
     return 'bg-yellow-600';
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white">
-        Loading admin panel...
-      </div>
-    );
-  }
+  const logout = () => {
+    document.cookie = 'adminAuthenticated=; path=/; max-age=0; SameSite=Lax';
+    router.push('/admin/login');
+  };
 
-  const renderLogCard = (
-    log: ContactLog,
-    type: 'contact' | 'booking'
-  ) => (
+  const renderLogCard = (log: BookingLog) => (
     <div
       key={log.id}
-      className="bg-gray-900 border border-gray-800 p-4 rounded-xl"
+      className="rounded-xl border border-gray-800 bg-gray-900 p-4"
     >
-      <div className="flex flex-col md:flex-row md:justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:justify-between">
         <div>
-          <p className="font-bold text-lg">{log.name}</p>
+          <p className="text-lg font-bold">{log.name}</p>
 
-          {log.confirmationNumber && (
-            <p className="text-sm text-green-300 font-bold">
-              🔎 Confirmation: {log.confirmationNumber}
-            </p>
+          <p className="text-sm font-bold text-green-300">
+            🔎 Confirmation: {log.confirmation_number}
+          </p>
+
+          <p className="text-sm text-gray-400">📧 {log.email}</p>
+          <p className="text-sm text-gray-400">📞 {log.phone}</p>
+          <p className="text-sm text-gray-400">📅 {log.booking_date}</p>
+          <p className="text-sm text-gray-400">🧾 {log.package_type}</p>
+
+          {log.message && (
+            <p className="text-sm text-gray-400">💬 {log.message}</p>
           )}
-
-          <p className="text-gray-400 text-sm">📧 {log.email}</p>
-          <p className="text-gray-400 text-sm">📞 {log.phone}</p>
-          <p className="text-gray-400 text-sm">📅 {log.date}</p>
-
-          {log.packageType && (
-            <p className="text-gray-400 text-sm">🧾 {log.packageType}</p>
-          )}
-
-          <p className="text-gray-400 text-sm">💬 {log.message}</p>
 
           <span
-            className={`inline-block mt-3 text-xs px-3 py-1 rounded-full text-white ${statusClass(
+            className={`mt-3 inline-block rounded-full px-3 py-1 text-xs text-white ${statusClass(
               log.status
             )}`}
           >
@@ -180,42 +199,37 @@ export default function AdminPanel() {
         </div>
 
         <div className="text-xs text-gray-500">
-          {formatDate(log.timestamp)}
+          {formatDate(log.created_at)}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mt-4">
-        <button
-          onClick={() => updateStatus(log.id, type, 'approved')}
-          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs rounded"
-        >
-          Approve
-        </button>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {statusOptions.map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => updateStatus(log.id, status)}
+            disabled={log.status === status}
+            className="rounded bg-white/10 px-3 py-1 text-xs text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {statusLabel(status)}
+          </button>
+        ))}
+
+        {log.status === 'cancelled' && (
+          <button
+            type="button"
+            onClick={() => reinstateBooking(log.id)}
+            className="rounded bg-yellow-600 px-3 py-1 text-xs text-white transition hover:bg-yellow-700"
+          >
+            Reinstate Booking
+          </button>
+        )}
 
         <button
-          onClick={() => updateStatus(log.id, type, 'in_process')}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-xs rounded"
-        >
-          In Progress
-        </button>
-
-        <button
-          onClick={() => updateStatus(log.id, type, 'for_pick_up')}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 text-xs rounded"
-        >
-          For Pick Up
-        </button>
-
-        <button
-          onClick={() => updateStatus(log.id, type, 'completed')}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 text-xs rounded"
-        >
-          Done / Completed
-        </button>
-
-        <button
-          onClick={() => remove(log.id, type)}
-          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 text-xs rounded"
+          type="button"
+          onClick={() => remove(log.id)}
+          className="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-700"
         >
           Delete
         </button>
@@ -223,61 +237,85 @@ export default function AdminPanel() {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-white">
+        Loading admin panel...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="border-b border-gray-800 p-6 flex justify-between">
+      <div className="flex flex-col gap-4 border-b border-gray-800 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Admin Panel</h1>
-          <p className="text-gray-400 text-sm">
-            Bookings & Contact Management
+          <p className="text-sm text-gray-400">
+            Supabase Booking Management
           </p>
         </div>
 
         <button
-          onClick={() => {
-            localStorage.removeItem('adminAuthenticated');
-            router.push('/admin/login');
-          }}
-          className="bg-red-600 px-4 py-2 rounded"
+          type="button"
+          onClick={logout}
+          className="rounded bg-red-600 px-4 py-2 transition hover:bg-red-700"
         >
           Logout
         </button>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6 space-y-10">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="mx-auto max-w-6xl space-y-10 p-6">
+        {error && (
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <p className="text-sm text-gray-400">Total Bookings</p>
+            <p className="text-3xl font-black">{bookingLogs.length}</p>
+          </div>
+
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <p className="text-sm text-gray-400">Pending</p>
+            <p className="text-3xl font-black">
+              {bookingLogs.filter((log) => log.status === 'pending').length}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <p className="text-sm text-gray-400">Completed</p>
+            <p className="text-3xl font-black">
+              {bookingLogs.filter((log) => log.status === 'completed').length}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <p className="text-sm text-gray-400">Cancelled</p>
+            <p className="text-3xl font-black">
+              {bookingLogs.filter((log) => log.status === 'cancelled').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search confirmation number, name, or phone number..."
-            className="w-full h-12 rounded-xl bg-black border border-gray-700 px-4 text-white outline-none focus:border-white"
+            placeholder="Search confirmation number, name, phone, or email..."
+            className="h-12 w-full rounded-xl border border-gray-700 bg-black px-4 text-white outline-none focus:border-white"
           />
         </div>
 
         <section>
-          <h2 className="text-xl font-semibold mb-4">
-            Contact Submissions
-          </h2>
-
-          <div className="space-y-4">
-            {filteredContactLogs.length === 0 ? (
-              <p className="text-gray-500">No matching contact submissions.</p>
-            ) : (
-              filteredContactLogs.map((log) => renderLogCard(log, 'contact'))
-            )}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold mb-4">
-            Booking Requests
-          </h2>
+          <h2 className="mb-4 text-xl font-semibold">Booking Requests</h2>
 
           <div className="space-y-4">
             {filteredBookingLogs.length === 0 ? (
               <p className="text-gray-500">No matching booking requests.</p>
             ) : (
-              filteredBookingLogs.map((log) => renderLogCard(log, 'booking'))
+              filteredBookingLogs.map((log) => renderLogCard(log))
             )}
           </div>
         </section>

@@ -3,6 +3,7 @@
 import HeroSection from "@/sections/hero-section/HeroSection";
 import AboutSection from "@/sections/about-section/AboutSection";
 import Services from "@/sections/services/Services";
+import Corousel from "@/sections/corousel/Corousel";
 import Gallery from "@/sections/galleries/Gallery";
 
 
@@ -12,6 +13,7 @@ export default function Home() {
       <HeroSection />
       <AboutSection />
       <Services />
+      <Corousel />
       <Gallery />
     </div>
   );

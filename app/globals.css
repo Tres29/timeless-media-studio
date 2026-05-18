@@ -1,31 +1,39 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
 @import "tailwindcss";
 
 :root {
-    /* Optional: para madaling gamitin sa ibang parts */
+    /* FONT FAMILY */
     --font-serif: 'DM Serif Display', serif;
+    --font-poppins: 'Poppins', sans-serif;
 }
 
 html {
   scroll-behavior: smooth;
   /* font-family: var(--font-serif); */
+  font-family: var(--font-poppins);
 }
 
     body {
-    margin: 0;
-    background-color: black;
+        margin: 0;
+        /* background-color: black; */
     }
 
         .hero-section {
-        background-image: linear-gradient(to right, rgba(0,0,0,0.8) 20%, rgba(0,0,0,0.2) 100%), 
+            background-image: linear-gradient(to right, rgba(0,0,0,0.8) 20%, rgba(0,0,0,0.2) 100%), 
                             url("/images/camera.png");
-        background-size: cover; 
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed; /* Parallax effect para sa extra smoothness */
+            background-size: cover; 
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed; /* Parallax effect for extra smoothness */
         }
             .dm-serif {
                 font-family: var(--font-serif);
+            }
+
+            .poppina {
+                font-family: var(--font-poppins)
             }
 
         /* Button glow effect */

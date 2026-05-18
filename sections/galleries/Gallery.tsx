@@ -28,8 +28,8 @@ const Gallery = () => {
         return () => clearInterval(interval);
     }, [galleryPhotos.length])
     return (
-        <div id="gallery" className="gallery flex flex-col justify-center mt-8">
-            <SectionHeading title="Gallery"/>
+        <div id="gallery" className="gallery flex flex-col justify-center mt-8 bg-gradient-to-br from-[#A6A6A6] via-[#808080] to-[#595959] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),_0_10px_15px_-3px_rgba(0,0,0,0.3)]">
+            <SectionHeading title="GALLERY"/>
             <div className="hidden gallery xl:flex flex-row justify gap-8 px-48 py-8">
                 {/** First Column */}
                 <div className="w-1/3 flex flex-col gap-y-8">

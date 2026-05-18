@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+// import { useState, useEffect, useRef } from "react";
 
 
 interface IEventService {
@@ -21,7 +21,7 @@ const EventService = ({ name , event } : IEventService) => {
     
     return (
         <div
-            className={`group flex justify-center items-center w-full h-[500px] ${bgClass} bg-no-repeat bg-cover bg-center rounded `}
+            className={`group flex justify-center items-center w-full h-48 lg:h-64 lg:h-[500px] ${bgClass} bg-no-repeat bg-cover bg-center rounded `}
         >
             <h3 
                 className="relative z-10 text-lg lg:text-4xl text-white font-bold text-center px-4 lg:opacity-0 translate-y-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0"

@@ -10,7 +10,7 @@ const SectionHeading = ({ title, children }: SectionHeadingProps) => {
             className="flex justify-center items-center"
         >
             <span 
-                className="bg-[#101828] px-8 py-4 w-[420px] text-lg lg:text-4xl font-bold rounded text-white text-center shadow-xl "
+                className="poppins px-8 py-4 w-[420px] text-lg lg:text-6xl font-bold rounded text-black text-center font-bold text-shadow-lg"
             >
                 { children || title}
             </span>

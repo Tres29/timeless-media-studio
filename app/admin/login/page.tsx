@@ -1,82 +1,72 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function AdminLogin() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+export default function AdminLoginPage() {
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const login = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Simple authentication - in production, use proper auth
-    if (username === 'admin' && password === 'admin123') {
-      localStorage.setItem('adminAuthenticated', 'true');
-      router.push('/admin');
-    } else {
-      setError('Invalid credentials');
+    if (username === "admin" && password === "admin123") {
+      document.cookie =
+        "adminAuthenticated=true; path=/; max-age=86400; SameSite=Lax";
+
+      router.push("/admin");
+      return;
     }
+
+    setError("Invalid admin username or password.");
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">Admin Login</h1>
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
+      <form
+        onSubmit={login}
+        className="w-full max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-xl"
+      >
+        <h1 className="mb-2 text-3xl font-bold">Admin Login</h1>
+        <p className="mb-6 text-sm text-gray-400">
+          Login to manage bookings.
+        </p>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="mb-4 rounded bg-red-500/10 p-3 text-sm text-red-300">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="username" className="block text-gray-700 text-sm font-bold mb-2">
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              required
-            />
-          </div>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Username"
+          className="mb-4 h-12 w-full rounded-xl border border-gray-700 bg-black px-4 text-white outline-none focus:border-white"
+        />
 
-          <div className="mb-6">
-            <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              required
-            />
-          </div>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          className="mb-6 h-12 w-full rounded-xl border border-gray-700 bg-black px-4 text-white outline-none focus:border-white"
+        />
 
-          <div className="flex items-center justify-between">
-            <button
-              type="submit"
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full"
-            >
-              Sign In
-            </button>
-          </div>
-        </form>
+        <button
+          type="submit"
+          className="h-12 w-full rounded-xl bg-white font-bold text-black transition hover:bg-gray-200"
+        >
+          Login
+        </button>
 
-        <div className="mt-4 text-center text-sm text-gray-600">
-          <p>Demo credentials:</p>
-          <p>Username: admin</p>
-          <p>Password: admin123</p>
-        </div>
-      </div>
+        <p className="mt-4 text-xs text-gray-500">
+          Default login: admin / admin123
+        </p>
+      </form>
     </div>
   );
 }

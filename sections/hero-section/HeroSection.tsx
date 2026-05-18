@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+import QR from "@/sections/hero-section/QR";
+
 const words = [
   'Moment', 'Memory', 'Story', 'Dream', 'Magic', 
   'Light', 'Frame', 'Essence', 'Beauty', 'Art', 
@@ -86,6 +88,9 @@ const HeroSection = () => {
         >
           Book Now
         </motion.button>
+      </div>
+      <div className="hidden relative lg:flex items-center p-16 mr-72 w-1/2 h-screen">
+        <QR />
       </div>
     </div>
   );

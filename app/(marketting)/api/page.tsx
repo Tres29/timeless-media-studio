@@ -1,56 +1,73 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type BookingStatus =
-  | "pending"
-  | "approved"
-  | "in_process"
-  | "for_pick_up"
-  | "completed";
+import { useEffect, useState, useCallback } from "react";
+import type { BookingStatus } from "@/lib/supabase/types";
 
 type BookingLog = {
   id: string;
   name: string;
   phone: string;
   email: string;
-  date: string;
-  packageType: string;
-  message: string;
-  timestamp: string;
-  confirmationNumber: string;
+  booking_date: string;
+  package_type: string;
+  message?: string | null;
+  confirmation_number: string;
   status: BookingStatus;
+  created_at: string;
 };
 
 export default function TrackerPage() {
   const [confirmationNumber, setConfirmationNumber] = useState("");
   const [booking, setBooking] = useState<BookingLog | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const findBooking = () => {
-    const logs = JSON.parse(
-      localStorage.getItem("adminBookingLogs") || "[]"
-    ) as BookingLog[];
+  const findBooking = useCallback(async () => {
+    const query = confirmationNumber.trim();
 
-    const found = logs.find(
-      (log) =>
-        log.confirmationNumber?.toLowerCase() ===
-        confirmationNumber.trim().toLowerCase()
-    );
+    if (!query) {
+      setBooking(null);
+      setNotFound(false);
+      return;
+    }
 
-    setBooking(found || null);
-    setNotFound(!found);
-  };
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/bookings?confirmationNumber=${encodeURIComponent(query)}`,
+        { cache: "no-store" }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to track booking.");
+      }
+
+      const found = (await response.json()) as BookingLog | null;
+
+      setBooking(found);
+      setNotFound(!found);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to track booking.");
+      setBooking(null);
+      setNotFound(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [confirmationNumber]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       if (confirmationNumber.trim()) {
-        findBooking();
+        void findBooking();
       }
-    }, 2000);
+    }, 5000);
 
-    return () => clearInterval(interval);
-  }, [confirmationNumber]);
+    return () => window.clearInterval(interval);
+  }, [confirmationNumber, findBooking]);
 
   const getStatusLabel = (status: BookingStatus) => {
     if (status === "pending") return "Pending Approval";
@@ -72,12 +89,12 @@ export default function TrackerPage() {
   const currentStep = booking ? steps.indexOf(booking.status) : -1;
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-12">
+    <main className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-28">
       <div className="w-full max-w-2xl bg-[#4f4f4f] rounded-3xl p-8 border border-white/10 shadow-2xl">
         <h1 className="text-3xl font-black mb-2">Track Your Booking</h1>
 
         <p className="text-gray-300 mb-6">
-          Enter your confirmation number to view real-time booking status.
+          Enter your confirmation number to view your live Supabase booking status.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -90,11 +107,18 @@ export default function TrackerPage() {
 
           <button
             onClick={findBooking}
-            className="bg-white text-black px-6 py-3 rounded-xl font-black hover:scale-[1.03] active:scale-[0.97] transition"
+            disabled={loading}
+            className="bg-white text-black px-6 py-3 rounded-xl font-black hover:scale-[1.03] active:scale-[0.97] transition disabled:opacity-50"
           >
-            TRACK
+            {loading ? "TRACKING..." : "TRACK"}
           </button>
         </div>
+
+        {error && (
+          <div className="bg-red-500/20 border border-red-400 text-red-200 p-4 rounded-xl mb-4">
+            {error}
+          </div>
+        )}
 
         {notFound && (
           <div className="bg-red-500/20 border border-red-400 text-red-200 p-4 rounded-xl">
@@ -106,7 +130,7 @@ export default function TrackerPage() {
           <div className="bg-black/35 rounded-2xl p-5">
             <p className="text-gray-400 text-sm">Confirmation Number</p>
             <p className="text-2xl font-black tracking-widest mb-5">
-              {booking.confirmationNumber}
+              {booking.confirmation_number}
             </p>
 
             <p className="text-gray-400 text-sm">Current Status</p>
@@ -143,8 +167,8 @@ export default function TrackerPage() {
             <div className="border-t border-white/10 pt-4 text-sm space-y-1 text-gray-300">
               <p>Name: {booking.name}</p>
               <p>Email: {booking.email}</p>
-              <p>Date: {booking.date}</p>
-              <p>Package: {booking.packageType}</p>
+              <p>Date: {booking.booking_date}</p>
+              <p>Package: {booking.package_type}</p>
             </div>
           </div>
         )}
