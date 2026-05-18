@@ -10,7 +10,7 @@ const navLinks = [
     { name: "Home", href: "/" },
     { name: "About", href: "/#about" },
     { name: "Gallery", href: "/#gallery" },
-    { name: "Tracking Order", href: "/api" },
+    { name: "Tracking Order", href: "/contact" },
 ];
 
 const MobileNav = () => {

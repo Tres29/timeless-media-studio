@@ -11,7 +11,7 @@ const navLinks = [
     { name: "About", href: "/#about" },
     { name: "Services", href: "/#services" },
     { name: "Gallery", href: "/#gallery" },
-    { name: "Tracking Order", href: "/api" },
+    { name: "Tracking Order", href: "/contact" },
 ];
 
 const DesktopNav = () => {
