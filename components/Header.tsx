@@ -2,7 +2,7 @@
 
 import MobileNav from "@/components/ui/MobileNav";
 import DesktopNav from "@/components/ui/DesktopNav";
-import { useHeaderVisibility } from "@/hooks/useHeaderVisibility";
+import { useHeaderVisibility } from "@/components/hooks/useHeaderVisibility";
 
 
 
