@@ -1,60 +1,40 @@
 "use client";
-
-
-import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
-import { MdOutlineMonochromePhotos } from "react-icons/md";
+import TimelessLogo from "@/components/ui/TimelessLogo";
+interface MobileNavProps {
+  navLinks: { 
+    name: string;
+    href: string;
+  }[];
+  visibility: boolean;
+  menuOpen: boolean;
+  setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
 
-const navLinks = [
-    { name: "Home", href: "/" },
-    { name: "About", href: "/#about" },
-    { name: "Gallery", href: "/#gallery" },
-    { name: "Tracking Order", href: "/contact" },
-];
-
-const MobileNav = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const lastScrollY = useRef(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-    const currentScrollY = window.scrollY;
-
-      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-        setHeaderVisible(false);
-        setMenuOpen(false)
-      } else {
-        setHeaderVisible(true);
-      }
-
-      lastScrollY.current = currentScrollY;
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
+const MobileNav = ({
+    navLinks,
+    visibility,
+    menuOpen,
+    setMenuOpen
+}: MobileNavProps) => {
   
-
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 bg-black text-white transition-transform duration-500 ease-in-out ${
-        headerVisible ? "translate-y-0" : "-translate-y-full"
+        visibility ? "translate-y-0" : "-translate-y-full"
       }`}
     >
         <div 
             className="flex items-center justify-between px-4 py-4 sm:px-8"
         >
-            <div className="text-2xl sm:text-4xl font-bold">
-                <MdOutlineMonochromePhotos size="60" />
-            </div>
+            <TimelessLogo />
 
+            {/** Hamburger Button */}
             <button
-            title="hamburger"
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="relative z-50 flex h-10 w-10 flex-col items-center justify-center gap-1 rounded-sm border border-white"
+                title="hamburger"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="relative z-50 flex h-10 w-10 flex-col items-center justify-center gap-1 rounded-sm border border-blue-white shadow-lg shadow-gray-900"
             >
                 <span
                     className={`h-0.5 w-6 bg-white transition-all duration-300 ${
@@ -85,7 +65,7 @@ const MobileNav = () => {
                         key={link.name}
                         href={link.href}
                         onClick={() => setMenuOpen(false)}
-                        className="w-full rounded border border-white px-4 py-2 text-center text-lg transition duration-300 hover:bg-white hover:text-black active:scale-95 sm:w-60 shadow-lg shadow-gray-500 text-shadow-md text-shadow-sky-300"
+                        className="dm-serif w-full rounded px-4 py-2 text-center text-lg transition duration-300 hover:bg-white hover:text-black active:scale-95 sm:w-60 shadow-sm shadow-gray-500 text-shadow-md text-shadow-sky-300/40 tracking-widest"
                     >
                         {link.name}
                     </Link>
