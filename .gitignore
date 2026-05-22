@@ -1,14 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# Environment variables - NEVER commit these
-.env
-.env.local
-.env.*.local
-.env.production.local
-
 # Dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -17,15 +9,15 @@
 !.yarn/versions
 
 # Testing
-/coverage
+coverage/
 
 # Next.js
-/.next/
-/out/
-/build
+.next/
+out/
+build/
 
 # Production
-/dist
+dist/
 
 # Logs
 npm-debug.log*
@@ -33,20 +25,26 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# OS
-.DS_Store
-*.pem
-Thumbs.db
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.*.local
+.env.production.local
 
 # Vercel
-.vercel
+.vercel/
 
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
