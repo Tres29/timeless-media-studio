@@ -47,6 +47,7 @@ export default function PaymentComponent({
 
     try {
       console.log(`💳 Processing ${selectedMethod.toUpperCase()} payment...`);
+      console.log(`Amount: ₱${amount}, Reference: ${confirmationNumber}`);
 
       const paymentResponse = await createPaymentSource({
         amount,
@@ -60,12 +61,15 @@ export default function PaymentComponent({
       });
 
       console.log('✓ Payment created:', paymentResponse.id);
+      console.log('Checkout URL:', paymentResponse.checkoutUrl);
 
       if (paymentResponse.checkoutUrl) {
         // Redirect to payment gateway (for GCash/Maya)
+        console.log('🔄 Redirecting to payment gateway...');
         window.location.href = paymentResponse.checkoutUrl;
       } else {
         // Payment successful (for instant methods)
+        console.log('✓ Payment processed instantly');
         setSuccess(true);
         onPaymentSuccess?.(paymentResponse.id);
       }

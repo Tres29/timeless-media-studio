@@ -421,6 +421,8 @@ export default function BookingForm() {
     };
 
     try {
+      console.log("📝 Saving booking...", bookingPayload);
+      
       const bookingResponse = await fetch("/api/bookings", {
         method: "POST",
         headers: {
@@ -431,13 +433,25 @@ export default function BookingForm() {
 
       const savedBooking = await bookingResponse.json().catch(() => null);
 
-      if (!bookingResponse.ok || !savedBooking) {
-        setEmailError(savedBooking?.error || "Failed to save booking.");
+      console.log("Response status:", bookingResponse.status, "Data:", savedBooking);
+
+      if (!bookingResponse.ok) {
+        const errorMsg = savedBooking?.error || "Failed to save booking.";
+        console.error("❌ Booking error:", errorMsg);
+        setEmailError(errorMsg);
+        return;
+      }
+
+      if (!savedBooking) {
+        console.error("❌ No booking data returned");
+        setEmailError("Failed to retrieve booking confirmation.");
         return;
       }
 
       const finalConfirmationNumber =
         savedBooking.confirmation_number || generatedConfirmation;
+
+      console.log("✓ Booking saved:", finalConfirmationNumber);
 
       // Store booking data for payment step
       setSavedBookingData({
@@ -448,12 +462,14 @@ export default function BookingForm() {
         confirmationNumber: finalConfirmationNumber,
       });
 
-      // Close email dialog and show payment step
+      // Close email dialog and show payment step - ensure both happen together
       setShowEmailDialog(false);
       setShowPaymentStep(true);
 
-      // Send confirmation email
-      await fetch("/api/send-confirmation", {
+      console.log("💳 Payment step initiated");
+
+      // Send confirmation email (non-blocking)
+      fetch("/api/send-confirmation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -462,9 +478,12 @@ export default function BookingForm() {
           ...bookingPayload,
           confirmationNumber: finalConfirmationNumber,
         }),
-      });
-    } catch {
-      setEmailError("Failed to connect to booking database.");
+      }).catch((err) => console.error("Email send error:", err));
+    } catch (error) {
+      console.error("❌ Booking process error:", error);
+      setEmailError(
+        error instanceof Error ? error.message : "Failed to connect to booking database."
+      );
     } finally {
       setSending(false);
     }
@@ -669,7 +688,7 @@ export default function BookingForm() {
       </div>
 
       {showEmailDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/85 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#141414]/95 p-6 text-white shadow-[0_30px_100px_rgba(0,0,0,0.7)]">
             <h2 className="mb-2 text-2xl font-black">Confirm Your Booking</h2>
 
@@ -716,8 +735,8 @@ export default function BookingForm() {
       )}
 
       {showPaymentStep && savedBookingData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm" style={{ visibility: showPaymentStep ? 'visible' : 'hidden' }}>
+          <div className="w-full max-w-2xl rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-2xl font-black">Complete Your Payment</h2>
 
@@ -735,7 +754,7 @@ export default function BookingForm() {
               <p className="text-lg font-black">{savedBookingData.confirmationNumber}</p>
             </div>
 
-            <div className="text-black">
+            <div className="rounded-lg overflow-hidden bg-white">
               <PaymentComponent
                 packageType={savedBookingData.packageType}
                 name={savedBookingData.name}

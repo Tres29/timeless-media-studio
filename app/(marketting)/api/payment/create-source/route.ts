@@ -84,8 +84,13 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       console.error('❌ Paymongo API Error:', errorData);
+      console.error('Error details:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorData,
+      });
       return NextResponse.json(
-        { error: errorData?.errors?.[0]?.detail || 'Failed to create payment' },
+        { error: errorData?.errors?.[0]?.detail || 'Failed to create payment source' },
         { status: response.status }
       );
     }
@@ -94,6 +99,18 @@ export async function POST(req: Request) {
     const source = result.data;
 
     console.log(`✓ Payment source created: ${source.id}`);
+    console.log(`Source attributes:`, source.attributes);
+    
+    // Extract checkout URL - handle both snake_case and camelCase
+    let checkoutUrl = source.attributes?.checkout_url || source.attributes?.['checkout_url'];
+    
+    // If no checkout URL from API, construct fallback
+    if (!checkoutUrl) {
+      console.warn('⚠️ Paymongo checkout_url not provided, using source link');
+      checkoutUrl = `https://checkout.paymongo.com/sources/${source.id}`;
+    }
+
+    console.log(`Final checkout URL:`, checkoutUrl);
 
     // Return payment response
     const paymentResponse: PaymentResponse = {
@@ -104,8 +121,14 @@ export async function POST(req: Request) {
       status: 'pending',
       sourceId: source.id,
       referenceId: paymentData.referenceId,
-      checkoutUrl: source.attributes.checkout_url,
+      checkoutUrl: checkoutUrl,
     };
+
+    console.log('✓ Payment Response sent:', {
+      id: paymentResponse.id,
+      hasCheckoutUrl: !!paymentResponse.checkoutUrl,
+      amount: paymentResponse.amount,
+    });
 
     return NextResponse.json(paymentResponse);
   } catch (error) {
