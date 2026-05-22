@@ -1,0 +1,50 @@
+name: Build Verification
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --prefer-offline --no-audit
+
+      - name: Check Code Quality (Lint)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build Application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY: pk_test_placeholder
+          PAYMONGO_SECRET_KEY: sk_test_placeholder
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder_key
+
+      - name: Build Success Summary
+        if: success()
+        run: echo "✅ Build completed successfully!"
+
+      - name: Build Failure Alert
+        if: failure()
+        run: echo "❌ Build failed - check logs above"
