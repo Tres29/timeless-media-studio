@@ -1,47 +1,66 @@
 /**
  * PayMongo Payment Utility
  */
-import type {
-  PaymentData,
-  PaymentMethod,
-  PaymentResponse,
+
+import {
+  PAYMONGO_API_URL,
+  type PaymentData,
+  type PaymentMethod,
+  type PaymentResponse,
 } from "./payment-config";
 
 export async function createPaymentSource(
   paymentData: PaymentData
 ): Promise<PaymentResponse> {
-  const response = await fetch("/api/payment/create-source", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(paymentData),
-  });
+  try {
+    const response = await fetch("/api/payment/create-source", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(paymentData),
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(error?.error || "Failed to create payment");
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error || "Failed to create payment");
+    }
+
+    return (await response.json()) as PaymentResponse;
+  } catch (error) {
+    console.error("Payment creation error:", error);
+    throw error;
   }
-
-  return response.json();
 }
 
-export async function getPaymentStatus(paymentId: string): Promise<PaymentResponse> {
-  const response = await fetch(`/api/payment/status?id=${paymentId}`);
+export async function getPaymentStatus(
+  paymentId: string
+): Promise<PaymentResponse> {
+  try {
+    const response = await fetch(`/api/payment/status?id=${paymentId}`);
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(error?.error || "Failed to fetch payment status");
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.error || "Failed to fetch payment status");
+    }
+
+    return (await response.json()) as PaymentResponse;
+  } catch (error) {
+    console.error("Payment status error:", error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export function getPaymentMethodLabel(method: PaymentMethod): string {
-  const labels: Record<string, string> = {
+  const labels: Record<PaymentMethod, string> = {
     gcash: "GCash",
     maya: "Maya",
     qrph: "QR Ph",
-    card: "Credit/Debit Card",
   };
 
   return labels[method] || method;
+}
+
+export function getCheckoutUrl(sourceId: string): string {
+  return `${PAYMONGO_API_URL}/sources/${sourceId}`;
 }

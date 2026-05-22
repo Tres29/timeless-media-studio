@@ -6,100 +6,129 @@ import {
   type PaymentResponse,
 } from "@/lib/payment-config";
 
-function getAuthHeader(key: string) {
-  return `Basic ${Buffer.from(`${key}:`).toString("base64")}`;
+function createAuthHeader(apiKey: string) {
+  return Buffer.from(`${apiKey}:`).toString("base64");
 }
 
 function getBaseUrl() {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
+    process.env.VERCEL_URL?.replace(/^/, "https://") ||
     "http://localhost:3000"
   ).replace(/\/$/, "");
 }
 
-async function paymongoFetch(path: string, key: string, payload?: unknown) {
-  const response = await fetch(`${PAYMONGO_API_URL}${path}`, {
-    method: payload ? "POST" : "GET",
-    headers: {
-      Authorization: getAuthHeader(key),
-      "Content-Type": "application/json",
-    },
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
-
-  const result = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      result?.errors?.[0]?.detail ||
-        result?.errors?.[0]?.code ||
-        "PayMongo request failed"
-    );
-  }
-
-  return result;
+async function readPayMongoError(response: Response) {
+  const errorData = await response.json().catch(() => null);
+  return (
+    errorData?.errors?.[0]?.detail ||
+    errorData?.errors?.[0]?.message ||
+    "PayMongo request failed"
+  );
 }
 
-async function createQrPhPayment(paymentData: PaymentData, secretKey: string) {
-  const amount = Math.round(paymentData.amount * 100);
+async function createQrPhPayment(paymentData: PaymentData) {
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+  const publicKey = process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY;
 
-  const intent = await paymongoFetch("/payment_intents", secretKey, {
-    data: {
-      attributes: {
-        amount,
-        currency: paymentData.currency || "PHP",
-        payment_method_allowed: ["qrph"],
-        description: paymentData.description,
-        metadata: {
-          referenceId: paymentData.referenceId,
-          email: paymentData.email,
-        },
-      },
+  if (!secretKey || !publicKey) {
+    throw new Error("PayMongo public or secret key is missing");
+  }
+
+  const amountInCentavos = Math.round(paymentData.amount * 100);
+
+  const intentResponse = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${createAuthHeader(secretKey)}`,
+      "Content-Type": "application/json",
     },
-  });
-
-  const intentId = intent.data.id;
-  const clientKey = intent.data.attributes.client_key;
-
-  const method = await paymongoFetch("/payment_methods", secretKey, {
-    data: {
-      attributes: {
-        type: "qrph",
-        billing: {
-          name: paymentData.name,
-          email: paymentData.email,
-          phone: paymentData.phone,
-        },
-      },
-    },
-  });
-
-  const methodId = method.data.id;
-
-  const attached = await paymongoFetch(
-    `/payment_intents/${intentId}/attach`,
-    secretKey,
-    {
+    body: JSON.stringify({
       data: {
         attributes: {
-          payment_method: methodId,
-          client_key: clientKey,
+          amount: amountInCentavos,
+          currency: paymentData.currency || "PHP",
+          payment_method_allowed: ["qrph"],
+          description: paymentData.description,
+          metadata: {
+            referenceId: paymentData.referenceId,
+            email: paymentData.email,
+            qrPhSourceId: process.env.PAYMONGO_QRPH_SOURCE_ID || "",
+          },
         },
       },
+    }),
+  });
+
+  if (!intentResponse.ok) {
+    throw new Error(await readPayMongoError(intentResponse));
+  }
+
+  const intentResult = await intentResponse.json();
+  const paymentIntent = intentResult.data;
+
+  const methodResponse = await fetch(`${PAYMONGO_API_URL}/payment_methods`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${createAuthHeader(publicKey)}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          type: "qrph",
+          billing: {
+            name: paymentData.name,
+            email: paymentData.email,
+            phone: paymentData.phone,
+          },
+        },
+      },
+    }),
+  });
+
+  if (!methodResponse.ok) {
+    throw new Error(await readPayMongoError(methodResponse));
+  }
+
+  const methodResult = await methodResponse.json();
+  const paymentMethod = methodResult.data;
+
+  const attachResponse = await fetch(
+    `${PAYMONGO_API_URL}/payment_intents/${paymentIntent.id}/attach`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${createAuthHeader(publicKey)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            payment_method: paymentMethod.id,
+            client_key: paymentIntent.attributes.client_key,
+          },
+        },
+      }),
     }
   );
 
-  const qrImageUrl = attached.data.attributes?.next_action?.code?.image_url;
+  if (!attachResponse.ok) {
+    throw new Error(await readPayMongoError(attachResponse));
+  }
+
+  const attachResult = await attachResponse.json();
+  const attachedIntent = attachResult.data;
+  const qrImageUrl = attachedIntent.attributes?.next_action?.code?.image_url;
 
   if (!qrImageUrl) {
-    throw new Error("QR Ph image was not returned by PayMongo");
+    throw new Error("QR Ph code was created, but no QR image was returned");
   }
 
   const paymentResponse: PaymentResponse = {
-    id: intentId,
-    paymentIntentId: intentId,
-    paymentMethodId: methodId,
+    id: attachedIntent.id,
+    paymentIntentId: attachedIntent.id,
+    clientKey: attachedIntent.attributes.client_key,
     amount: paymentData.amount,
     currency: paymentData.currency || "PHP",
     description: paymentData.description,
@@ -111,14 +140,21 @@ async function createQrPhPayment(paymentData: PaymentData, secretKey: string) {
   return paymentResponse;
 }
 
-async function createWalletSource(paymentData: PaymentData, secretKey: string) {
+async function createSourcePayment(paymentData: PaymentData) {
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+
+  if (!secretKey) {
+    throw new Error("PAYMONGO_SECRET_KEY is missing");
+  }
+
   const baseUrl = getBaseUrl();
+  const amountInCentavos = Math.round(paymentData.amount * 100);
 
   const sourcePayload = {
     data: {
       attributes: {
         type: paymentData.method,
-        amount: Math.round(paymentData.amount * 100),
+        amount: amountInCentavos,
         currency: paymentData.currency || "PHP",
         redirect: {
           success: `${baseUrl}/payment/success`,
@@ -138,8 +174,22 @@ async function createWalletSource(paymentData: PaymentData, secretKey: string) {
     },
   };
 
-  const result = await paymongoFetch("/sources", secretKey, sourcePayload);
+  const response = await fetch(`${PAYMONGO_API_URL}/sources`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${createAuthHeader(secretKey)}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(sourcePayload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readPayMongoError(response));
+  }
+
+  const result = await response.json();
   const source = result.data;
+
   const checkoutUrl =
     source.attributes?.checkout_url ||
     source.attributes?.redirect?.checkout_url ||
@@ -159,6 +209,10 @@ async function createWalletSource(paymentData: PaymentData, secretKey: string) {
   return paymentResponse;
 }
 
+/**
+ * POST /api/payment/create-source
+ * Creates GCash/Maya source payments or QR Ph dynamic QR payments.
+ */
 export async function POST(req: Request) {
   try {
     const paymentData: PaymentData = await req.json();
@@ -171,37 +225,25 @@ export async function POST(req: Request) {
     }
 
     if (!Object.values(PAYMENT_METHODS).includes(paymentData.method)) {
-      return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
-    }
-
-    const secretKey = process.env.PAYMONGO_SECRET_KEY;
-
-    if (!secretKey) {
       return NextResponse.json(
-        { error: "PAYMONGO_SECRET_KEY is not configured" },
-        { status: 500 }
+        { error: "Invalid payment method" },
+        { status: 400 }
       );
     }
 
     if (paymentData.method === PAYMENT_METHODS.QRPH) {
-      const response = await createQrPhPayment(paymentData, secretKey);
-      return NextResponse.json(response);
+      const qrPayment = await createQrPhPayment(paymentData);
+      return NextResponse.json(qrPayment);
     }
 
-    if (
-      paymentData.method === PAYMENT_METHODS.GCASH ||
-      paymentData.method === PAYMENT_METHODS.MAYA
-    ) {
-      const response = await createWalletSource(paymentData, secretKey);
-      return NextResponse.json(response);
-    }
-
-    return NextResponse.json(
-      { error: "This payment method is not enabled yet" },
-      { status: 400 }
-    );
+    const sourcePayment = await createSourcePayment(paymentData);
+    return NextResponse.json(sourcePayment);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to process payment";
+    const message =
+      error instanceof Error ? error.message : "Failed to process payment";
+
+    console.error("Payment creation error:", error);
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,5 +1,11 @@
 /**
  * PayMongo Payment Configuration
+ *
+ * Add these to .env.local and Vercel Environment Variables:
+ * NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY=pk_test_xxx
+ * PAYMONGO_SECRET_KEY=sk_test_xxx
+ * NEXT_PUBLIC_APP_URL=http://localhost:3000
+ * PAYMONGO_QRPH_SOURCE_ID=code_6hpwAQRGaLLunn45rDbWi4kx optional reference only
  */
 
 export const PAYMONGO_API_URL = "https://api.paymongo.com/v1";
@@ -8,7 +14,6 @@ export const PAYMENT_METHODS = {
   GCASH: "gcash",
   MAYA: "maya",
   QRPH: "qrph",
-  CARD: "card",
 } as const;
 
 export type PaymentMethod =
@@ -45,7 +50,7 @@ export interface PaymentResponse {
   qrImageUrl?: string;
   sourceId?: string;
   paymentIntentId?: string;
-  paymentMethodId?: string;
+  clientKey?: string;
   referenceId: string;
 }
 
