@@ -28,119 +28,6 @@ async function readPayMongoError(response: Response) {
   );
 }
 
-async function createQrPhPayment(paymentData: PaymentData) {
-  const secretKey = process.env.PAYMONGO_SECRET_KEY;
-  const publicKey = process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY;
-
-  if (!secretKey || !publicKey) {
-    throw new Error("PayMongo public or secret key is missing");
-  }
-
-  const amountInCentavos = Math.round(paymentData.amount * 100);
-
-  const intentResponse = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${createAuthHeader(secretKey)}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      data: {
-        attributes: {
-          amount: amountInCentavos,
-          currency: paymentData.currency || "PHP",
-          payment_method_allowed: ["qrph"],
-          description: paymentData.description,
-          metadata: {
-            referenceId: paymentData.referenceId,
-            confirmationNumber: paymentData.referenceId,
-            email: paymentData.email,
-          },
-        },
-      },
-    }),
-  });
-
-  if (!intentResponse.ok) {
-    throw new Error(await readPayMongoError(intentResponse));
-  }
-
-  const intentResult = await intentResponse.json();
-  const paymentIntent = intentResult.data;
-
-  const methodResponse = await fetch(`${PAYMONGO_API_URL}/payment_methods`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${createAuthHeader(publicKey)}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      data: {
-        attributes: {
-          type: "qrph",
-          billing: {
-            name: paymentData.name,
-            email: paymentData.email,
-            phone: paymentData.phone,
-          },
-        },
-      },
-    }),
-  });
-
-  if (!methodResponse.ok) {
-    throw new Error(await readPayMongoError(methodResponse));
-  }
-
-  const methodResult = await methodResponse.json();
-  const paymentMethod = methodResult.data;
-
-  const attachResponse = await fetch(
-    `${PAYMONGO_API_URL}/payment_intents/${paymentIntent.id}/attach`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${createAuthHeader(publicKey)}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            payment_method: paymentMethod.id,
-            client_key: paymentIntent.attributes.client_key,
-          },
-        },
-      }),
-    }
-  );
-
-  if (!attachResponse.ok) {
-    throw new Error(await readPayMongoError(attachResponse));
-  }
-
-  const attachResult = await attachResponse.json();
-  const attachedIntent = attachResult.data;
-  const qrImageUrl = attachedIntent.attributes?.next_action?.code?.image_url;
-
-  if (!qrImageUrl) {
-    throw new Error("QR Ph code was created, but no QR image was returned");
-  }
-
-  const paymentResponse: PaymentResponse = {
-    id: attachedIntent.id,
-    paymentIntentId: attachedIntent.id,
-    clientKey: attachedIntent.attributes.client_key,
-    amount: paymentData.amount,
-    currency: paymentData.currency || "PHP",
-    description: paymentData.description,
-    status: "pending",
-    referenceId: paymentData.referenceId,
-    qrImageUrl,
-  };
-
-  return paymentResponse;
-}
-
 async function createSourcePayment(paymentData: PaymentData) {
   const secretKey = process.env.PAYMONGO_SECRET_KEY;
 
@@ -212,10 +99,6 @@ async function createSourcePayment(paymentData: PaymentData) {
   return paymentResponse;
 }
 
-/**
- * POST /api/payment/create-source
- * Creates GCash/Maya source payments or QR Ph dynamic QR payments.
- */
 export async function POST(req: Request) {
   try {
     const paymentData: PaymentData = await req.json();
@@ -232,11 +115,6 @@ export async function POST(req: Request) {
         { error: "Invalid payment method" },
         { status: 400 }
       );
-    }
-
-    if (paymentData.method === PAYMENT_METHODS.QRPH) {
-      const qrPayment = await createQrPhPayment(paymentData);
-      return NextResponse.json(qrPayment);
     }
 
     const sourcePayment = await createSourcePayment(paymentData);

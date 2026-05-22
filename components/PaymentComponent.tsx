@@ -86,7 +86,8 @@ export default function PaymentComponent({
       setSuccess(true);
       onPaymentSuccess?.(paymentResponse.id);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Payment processing failed.";
+      const errorMsg =
+        err instanceof Error ? err.message : "Payment processing failed.";
       setError(errorMsg);
       onPaymentError?.(errorMsg);
     } finally {
@@ -165,14 +166,6 @@ export default function PaymentComponent({
         </div>
       )}
 
-      {success && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-          <p className="text-sm font-semibold text-green-800">
-            ✓ Payment processed successfully.
-          </p>
-        </div>
-      )}
-
       {qrImageUrl && (
         <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center">
           <h4 className="text-lg font-bold">Scan QR Ph to Pay</h4>
@@ -190,17 +183,13 @@ export default function PaymentComponent({
           <p className="mt-3 break-all text-xs text-gray-500">
             QR Payment ID: {qrPaymentId}
           </p>
-
-          <p className="mt-2 text-xs text-gray-500">
-            After paying QR Ph, open the tracker and wait for admin/payment confirmation if it does not update automatically.
-          </p>
         </div>
       )}
 
       <div className="rounded-xl bg-gray-100 p-3 text-xs text-gray-600">
         <p>
-          <strong>Note:</strong> Your booking stays pending until payment is done.
-          After successful GCash/Maya payment, the booking status becomes approved.
+          <strong>Note:</strong> Your booking stays pending if you choose Pay Later.
+          After successful GCash/Maya payment, your booking status becomes approved.
         </p>
       </div>
 
@@ -243,7 +232,7 @@ export default function PaymentComponent({
           disabled={isProcessing}
           className="w-full rounded-xl border border-gray-400 px-5 py-3 font-semibold text-gray-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Pay later and open tracker
+          Pay later
         </button>
       )}
     </div>

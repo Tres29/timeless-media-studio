@@ -1,0 +1,213 @@
+CONTACT PAGE PATCH
+==================
+
+File:
+app/(marketting)/contact/page.tsx
+
+GOAL:
+Do NOT create a separate tracker page.
+Your existing tracker modal inside the contact/booking form will:
+- Show Pay Now when booking status is pending.
+- Keep status pending if client chooses Pay later.
+- Redirect back to /contact?track=CONFIRMATION_NUMBER after payment.
+- Auto-open tracker modal using that confirmation number.
+- Successful payment changes status to approved.
+
+------------------------------------------------------------
+1. CHANGE IMPORT
+------------------------------------------------------------
+
+Find:
+
+import { useState, type ChangeEvent, type FormEvent, } from "react";
+
+Replace with:
+
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+
+------------------------------------------------------------
+2. ADD STATE
+------------------------------------------------------------
+
+Near your other tracker states, add:
+
+const [showTrackerPayment, setShowTrackerPayment] = useState(false);
+
+------------------------------------------------------------
+3. AUTO OPEN TRACKER AFTER PAYMENT REDIRECT
+------------------------------------------------------------
+
+Add this inside BookingForm(), after generateConfirmationNumber or before return:
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const trackCode = params.get("track");
+
+  if (trackCode) {
+    setTrackerCode(trackCode);
+    setShowTrackerModal(true);
+
+    setTimeout(() => {
+      const trackButton = document.getElementById("auto-track-booking-button");
+      trackButton?.click();
+    }, 300);
+  }
+}, []);
+
+------------------------------------------------------------
+4. RESET TRACKER PAYMENT WHEN TRACKING
+------------------------------------------------------------
+
+Inside trackBooking(), after these lines:
+
+setTrackerError("");
+setTrackerMessage("");
+
+Add:
+
+setShowTrackerPayment(false);
+
+------------------------------------------------------------
+5. CHANGE PAYMENT SUCCESS HANDLER
+------------------------------------------------------------
+
+Replace your current handlePaymentSuccess with this:
+
+const handlePaymentSuccess = async (paymentId: string) => {
+  console.log("✓ Payment successful:", paymentId);
+
+  if (!savedBookingData) return;
+
+  try {
+    await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        confirmationNumber: savedBookingData.confirmationNumber,
+        status: "approved",
+      }),
+    });
+  } catch (error) {
+    console.error("Failed to approve booking after payment:", error);
+  }
+
+  setShowPaymentStep(false);
+  setConfirmationNumber(savedBookingData.confirmationNumber);
+  setTrackerCode(savedBookingData.confirmationNumber);
+  setShowTrackerModal(true);
+
+  setForm({
+    name: "",
+    phone: "",
+    date: "",
+    packageType: "",
+    message: "",
+  });
+
+  setSavedBookingData(null);
+};
+
+------------------------------------------------------------
+6. CHANGE CLOSE PAYMENT / PAY LATER HANDLER
+------------------------------------------------------------
+
+Replace your current closePaymentStep with this:
+
+const closePaymentStep = () => {
+  setShowPaymentStep(false);
+
+  if (savedBookingData) {
+    setConfirmationNumber(savedBookingData.confirmationNumber);
+    setTrackerCode(savedBookingData.confirmationNumber);
+    setShowTrackerModal(true);
+  }
+
+  setSavedBookingData(null);
+};
+
+------------------------------------------------------------
+7. ADD HIDDEN AUTO TRACK BUTTON
+------------------------------------------------------------
+
+Inside your tracker modal, where the Track Order button exists, add this hidden button near it:
+
+<button
+  id="auto-track-booking-button"
+  type="button"
+  onClick={trackBooking}
+  className="hidden"
+>
+  Auto Track
+</button>
+
+------------------------------------------------------------
+8. ADD PAY NOW BUTTON INSIDE TRACKER DETAILS
+------------------------------------------------------------
+
+Find where your trackedBooking details are displayed in the modal.
+After the booking details/status display, add this block:
+
+{trackedBooking.status === "pending" && (
+  <div className="mt-5 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 p-4">
+    <p className="text-sm text-yellow-100">
+      This booking is pending payment. You can pay now or pay later.
+    </p>
+
+    {!showTrackerPayment ? (
+      <button
+        type="button"
+        onClick={() => setShowTrackerPayment(true)}
+        className="mt-4 w-full rounded-xl bg-green-600 px-5 py-3 font-bold text-white transition hover:bg-green-700"
+      >
+        Pay Now
+      </button>
+    ) : (
+      <div className="mt-4">
+        <PaymentComponent
+          name={trackedBooking.name}
+          email={trackedBooking.email}
+          phone={trackedBooking.phone}
+          packageType={trackedBooking.packageType}
+          confirmationNumber={trackedBooking.confirmationNumber}
+          onPaymentError={(error) => setTrackerError(error)}
+        />
+
+        <button
+          type="button"
+          onClick={() => setShowTrackerPayment(false)}
+          className="mt-3 w-full rounded-xl border border-white/20 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
+        >
+          Cancel Payment
+        </button>
+      </div>
+    )}
+  </div>
+)}
+
+{trackedBooking.status === "approved" && (
+  <div className="mt-5 rounded-2xl border border-green-400/30 bg-green-500/10 p-4 text-green-100">
+    Payment is done. Your booking is approved.
+  </div>
+)}
+
+------------------------------------------------------------
+9. PAYMENT STEP MODAL PAY LATER BUTTON
+------------------------------------------------------------
+
+Where your PaymentComponent is used after new booking, update it like this:
+
+<PaymentComponent
+  packageType={savedBookingData.packageType}
+  name={savedBookingData.name}
+  email={savedBookingData.email}
+  phone={savedBookingData.phone}
+  confirmationNumber={savedBookingData.confirmationNumber}
+  onPaymentSuccess={handlePaymentSuccess}
+  onPaymentError={handlePaymentError}
+  onPayLater={closePaymentStep}
+  showPayLater
+/>
+
+This makes Pay Later keep the booking pending and opens your existing tracker modal.

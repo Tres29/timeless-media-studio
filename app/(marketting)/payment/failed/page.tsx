@@ -1,8 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function PaymentFailedPage() {
+function PaymentFailedContent() {
   const searchParams = useSearchParams();
   const confirmationNumber = searchParams.get("confirmationNumber") || "";
 
@@ -21,13 +22,29 @@ export default function PaymentFailedPage() {
 
         {confirmationNumber && (
           <a
-            href={`/tracker?confirmationNumber=${encodeURIComponent(confirmationNumber)}`}
+            href={`/contact?track=${encodeURIComponent(confirmationNumber)}`}
             className="mt-6 inline-flex rounded-full bg-white px-6 py-3 font-semibold text-black transition hover:bg-gray-200"
           >
-            Return to Tracker
+            Return to Booking Tracker
           </a>
         )}
       </div>
     </main>
+  );
+}
+
+export default function PaymentFailedPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black px-4 py-24 text-white">
+          <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl">
+            Loading payment result...
+          </div>
+        </main>
+      }
+    >
+      <PaymentFailedContent />
+    </Suspense>
   );
 }

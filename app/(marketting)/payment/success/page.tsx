@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-export default function PaymentSuccessPage() {
-  const router = useRouter();
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const confirmationNumber = searchParams.get("confirmationNumber") || "";
-  const [message, setMessage] = useState("Payment accepted. Updating your booking status...");
+  const [message, setMessage] = useState(
+    "Payment accepted. Updating your booking status..."
+  );
 
   useEffect(() => {
     const approveBooking = async () => {
@@ -31,19 +32,26 @@ export default function PaymentSuccessPage() {
         const data = await response.json().catch(() => null);
 
         if (!response.ok) {
-          setMessage(data?.error || "Payment accepted, but booking status update failed.");
+          setMessage(
+            data?.error || "Payment accepted, but booking status update failed."
+          );
           return;
         }
 
-        setMessage("Payment done. Booking approved. Redirecting to tracker...");
-        router.replace(`/tracker?confirmationNumber=${encodeURIComponent(confirmationNumber)}`);
+        setMessage("Payment done. Booking approved. Returning to booking tracker...");
+
+        window.location.href = `/contact?track=${encodeURIComponent(
+          confirmationNumber
+        )}`;
       } catch {
-        setMessage("Payment accepted, but we could not connect to the booking tracker.");
+        setMessage(
+          "Payment accepted, but we could not connect to the booking tracker."
+        );
       }
     };
 
     approveBooking();
-  }, [confirmationNumber, router]);
+  }, [confirmationNumber]);
 
   return (
     <main className="min-h-screen bg-black px-4 py-24 text-white">
@@ -58,7 +66,7 @@ export default function PaymentSuccessPage() {
 
         {confirmationNumber && (
           <a
-            href={`/tracker?confirmationNumber=${encodeURIComponent(confirmationNumber)}`}
+            href={`/contact?track=${encodeURIComponent(confirmationNumber)}`}
             className="mt-6 inline-flex rounded-full bg-white px-6 py-3 font-semibold text-black transition hover:bg-gray-200"
           >
             Open Booking Tracker
@@ -66,5 +74,21 @@ export default function PaymentSuccessPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black px-4 py-24 text-white">
+          <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl">
+            Loading payment result...
+          </div>
+        </main>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
