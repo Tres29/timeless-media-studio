@@ -5,6 +5,8 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
+import PaymentComponent from "@/components/PaymentComponent";
+import BookingCalendar from "@/components/BookingCalendar";
 
 type FormState = {
   name: string;
@@ -68,6 +70,7 @@ export default function BookingForm() {
 
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showTrackerModal, setShowTrackerModal] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [trackerCode, setTrackerCode] = useState("");
   const [trackerLoading, setTrackerLoading] = useState(false);
   const [trackerError, setTrackerError] = useState("");
@@ -89,6 +92,15 @@ export default function BookingForm() {
   const [emailError, setEmailError] = useState("");
   const [emailProvider, setEmailProvider] = useState<EmailProvider | "">("");
   const [confirmationNumber, setConfirmationNumber] = useState("");
+  const [showPaymentStep, setShowPaymentStep] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [savedBookingData, setSavedBookingData] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    packageType: string;
+    confirmationNumber: string;
+  } | null>(null);
 
   const generateConfirmationNumber = () => {
     const year = new Date().getFullYear();
@@ -307,6 +319,44 @@ export default function BookingForm() {
     }
   };
 
+  const handlePaymentSuccess = (paymentId: string) => {
+    console.log("✓ Payment successful:", paymentId);
+    setPaymentProcessing(false);
+    setShowPaymentStep(false);
+
+    if (savedBookingData) {
+      setConfirmationNumber(savedBookingData.confirmationNumber);
+    }
+
+    // Reset form after successful payment
+    setForm({
+      name: "",
+      phone: "",
+      date: "",
+      packageType: "",
+      message: "",
+    });
+    setSavedBookingData(null);
+  };
+
+  const handlePaymentError = (error: string) => {
+    console.error("❌ Payment error:", error);
+    setPaymentProcessing(false);
+  };
+
+  const closePaymentStep = () => {
+    setShowPaymentStep(false);
+    setSavedBookingData(null);
+    if (savedBookingData) {
+      setConfirmationNumber(savedBookingData.confirmationNumber);
+    }
+  };
+
+  const cancelPaymentStep = () => {
+    setShowPaymentStep(false);
+    setSavedBookingData(null);
+  };
+
   const cancelBooking = async () => {
     if (!trackedBooking) return;
 
@@ -394,6 +444,23 @@ export default function BookingForm() {
         return;
       }
 
+      const finalConfirmationNumber =
+        savedBooking.confirmation_number || generatedConfirmation;
+
+      // Store booking data for payment step
+      setSavedBookingData({
+        name: form.name,
+        email: cleanEmail,
+        phone: form.phone,
+        packageType: form.packageType,
+        confirmationNumber: finalConfirmationNumber,
+      });
+
+      // Close email dialog and show payment step
+      setShowEmailDialog(false);
+      setShowPaymentStep(true);
+
+      // Send confirmation email
       await fetch("/api/send-confirmation", {
         method: "POST",
         headers: {
@@ -401,22 +468,8 @@ export default function BookingForm() {
         },
         body: JSON.stringify({
           ...bookingPayload,
-          confirmationNumber:
-            savedBooking.confirmation_number || generatedConfirmation,
+          confirmationNumber: finalConfirmationNumber,
         }),
-      });
-
-      setShowEmailDialog(false);
-      setConfirmationNumber(
-        savedBooking.confirmation_number || generatedConfirmation
-      );
-
-      setForm({
-        name: "",
-        phone: "",
-        date: "",
-        packageType: "",
-        message: "",
       });
     } catch {
       setEmailError("Failed to connect to booking database.");
@@ -537,15 +590,24 @@ export default function BookingForm() {
             <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
               Date
             </label>
-            <input
-              title="date"
-              type="date"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              required
-              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
-            />
+            <button
+              type="button"
+              onClick={() => setShowCalendar(true)}
+              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 font-semibold text-left"
+            >
+              {form.date ? (
+                <>
+                  📅 {new Date(form.date).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </>
+              ) : (
+                "📅 Select a date from calendar"
+              )}
+            </button>
 
             <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
               Package
@@ -657,6 +719,49 @@ export default function BookingForm() {
                 {sending ? "SENDING..." : "CONFIRM"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showPaymentStep && savedBookingData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-black">Complete Your Payment</h2>
+
+              <button
+                type="button"
+                onClick={closePaymentStep}
+                className="rounded-full bg-white/10 px-4 py-2 font-black hover:bg-white/20"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6 rounded-2xl bg-white/[0.08] border border-white/10 p-4">
+              <p className="text-sm text-white/60 mb-2">Booking Confirmation</p>
+              <p className="text-lg font-black">{savedBookingData.confirmationNumber}</p>
+            </div>
+
+            <div className="text-black">
+              <PaymentComponent
+                packageType={savedBookingData.packageType}
+                name={savedBookingData.name}
+                email={savedBookingData.email}
+                phone={savedBookingData.phone}
+                confirmationNumber={savedBookingData.confirmationNumber}
+                onPaymentSuccess={handlePaymentSuccess}
+                onPaymentError={handlePaymentError}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={closePaymentStep}
+              className="mt-6 w-full rounded-2xl bg-white/10 py-3 font-bold text-white hover:bg-white/20 transition-all"
+            >
+              Skip for Now
+            </button>
           </div>
         </div>
       )}
@@ -922,6 +1027,41 @@ export default function BookingForm() {
               type="button"
               onClick={closeTrackerModal}
               className="mt-5 w-full rounded-2xl bg-white/10 py-3 font-bold text-white hover:bg-white/20"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCalendar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-black">Select Date</h2>
+
+              <button
+                type="button"
+                onClick={() => setShowCalendar(false)}
+                className="rounded-full bg-white/10 px-4 py-2 font-black hover:bg-white/20"
+              >
+                ✕
+              </button>
+            </div>
+
+            <BookingCalendar
+              selectedDate={form.date}
+              onDateSelect={(date) => {
+                setForm({ ...form, date });
+                setShowCalendar(false);
+              }}
+              maxBookingsPerDay={5}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowCalendar(false)}
+              className="mt-6 w-full rounded-2xl bg-white/10 py-3 font-bold text-white hover:bg-white/20 transition-all"
             >
               Close
             </button>
