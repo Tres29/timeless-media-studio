@@ -984,7 +984,7 @@ export default function BookingForm() {
                       <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 text-green-100">
                         <h3 className="font-black">Payment Done</h3>
                         <p className="mt-2 text-sm">
-                          Your booking is approved.
+                          Your booking is approved. Please note that, booking is non-refundable. Policy will applied after cancellation.
                         </p>
                       </div>
                     )}
