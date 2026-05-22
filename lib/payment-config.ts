@@ -56,6 +56,13 @@ export interface PaymentResponse {
 
 // Package pricing in PHP
 export const PACKAGE_PRICES: Record<string, number> = {
+  
+  "BASIC PACKAGE - ₱10": 10,
+  "ELITE PACKAGE - ₱20": 20,
+  "PREMIUM PACKAGE - ₱30": 30,
+  "BASIC PACKAGE": 10,
+  "ELITE PACKAGE": 20,
+  "PREMIUM PACKAGE": 30,
   'BASIC - VIDEOGRAPHY': 5000,
   'BASIC - PHOTOGRAPHY': 4000,
   'BASIC - EVENT COVERAGE': 6000,
