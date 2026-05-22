@@ -20,6 +20,7 @@ function getBaseUrl() {
 
 async function readPayMongoError(response: Response) {
   const errorData = await response.json().catch(() => null);
+
   return (
     errorData?.errors?.[0]?.detail ||
     errorData?.errors?.[0]?.message ||
@@ -52,8 +53,8 @@ async function createQrPhPayment(paymentData: PaymentData) {
           description: paymentData.description,
           metadata: {
             referenceId: paymentData.referenceId,
+            confirmationNumber: paymentData.referenceId,
             email: paymentData.email,
-            qrPhSourceId: process.env.PAYMONGO_QRPH_SOURCE_ID || "",
           },
         },
       },
@@ -148,6 +149,7 @@ async function createSourcePayment(paymentData: PaymentData) {
   }
 
   const baseUrl = getBaseUrl();
+  const reference = encodeURIComponent(paymentData.referenceId);
   const amountInCentavos = Math.round(paymentData.amount * 100);
 
   const sourcePayload = {
@@ -157,8 +159,8 @@ async function createSourcePayment(paymentData: PaymentData) {
         amount: amountInCentavos,
         currency: paymentData.currency || "PHP",
         redirect: {
-          success: `${baseUrl}/payment/success`,
-          failed: `${baseUrl}/payment/failed`,
+          success: `${baseUrl}/payment/success?confirmationNumber=${reference}`,
+          failed: `${baseUrl}/payment/failed?confirmationNumber=${reference}`,
         },
         billing: {
           name: paymentData.name,
@@ -168,6 +170,7 @@ async function createSourcePayment(paymentData: PaymentData) {
         description: paymentData.description,
         metadata: {
           referenceId: paymentData.referenceId,
+          confirmationNumber: paymentData.referenceId,
           email: paymentData.email,
         },
       },

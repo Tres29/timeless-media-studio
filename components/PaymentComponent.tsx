@@ -13,6 +13,8 @@ interface PaymentComponentProps {
   confirmationNumber: string;
   onPaymentSuccess?: (paymentId: string) => void;
   onPaymentError?: (error: string) => void;
+  onPayLater?: () => void;
+  showPayLater?: boolean;
 }
 
 const PAYMENT_OPTIONS: PaymentMethod[] = [
@@ -29,10 +31,10 @@ export default function PaymentComponent({
   confirmationNumber,
   onPaymentSuccess,
   onPaymentError,
+  onPayLater,
+  showPayLater = false,
 }: PaymentComponentProps) {
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
-    null
-  );
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -40,15 +42,16 @@ export default function PaymentComponent({
   const [qrPaymentId, setQrPaymentId] = useState("");
 
   const amount = PACKAGE_PRICES[packageType] || 0;
+  const paymentDisabled = !selectedMethod || isProcessing || success;
 
   const handlePayment = async () => {
     if (!selectedMethod) {
-      setError("Please select a payment method");
+      setError("Please select a payment method first.");
       return;
     }
 
     if (!amount || amount <= 0) {
-      setError("Invalid package price");
+      setError("Invalid package price.");
       return;
     }
 
@@ -83,8 +86,7 @@ export default function PaymentComponent({
       setSuccess(true);
       onPaymentSuccess?.(paymentResponse.id);
     } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "Payment processing failed";
+      const errorMsg = err instanceof Error ? err.message : "Payment processing failed.";
       setError(errorMsg);
       onPaymentError?.(errorMsg);
     } finally {
@@ -94,104 +96,130 @@ export default function PaymentComponent({
 
   if (!amount || amount <= 0) {
     return (
-      <div className="rounded-xl border border-yellow-400/40 bg-yellow-50 p-4 text-sm text-yellow-800">
-        📌 Payment information will be displayed once you select a package.
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <p className="text-sm text-yellow-800">
+          Payment information will be displayed once you select a package.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 text-gray-900 shadow-sm">
-      <div className="rounded-xl bg-gray-50 p-4">
-        <h3 className="text-lg font-bold">Payment Summary</h3>
-        <div className="mt-3 space-y-1 text-sm">
-          <p>
-            <span className="font-semibold">Package:</span> {packageType}
-          </p>
-          <p>
-            <span className="font-semibold">Amount:</span> ₱
-            {amount.toLocaleString()}
-          </p>
-          <p>
-            <span className="font-semibold">Reference:</span>{" "}
-            {confirmationNumber}
-          </p>
+    <div className="space-y-4 rounded-2xl border border-gray-300 bg-gradient-to-br from-gray-50 to-gray-100 p-6 text-gray-900">
+      <div className="border-b border-gray-300 pb-4">
+        <h3 className="mb-3 text-lg font-bold">Payment Summary</h3>
+
+        <div className="space-y-2">
+          <div className="flex justify-between gap-4">
+            <span>Package:</span>
+            <span className="text-right font-semibold">{packageType}</span>
+          </div>
+
+          <div className="flex justify-between gap-4">
+            <span>Amount:</span>
+            <span className="text-lg font-bold text-green-600">
+              ₱{amount.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="flex justify-between gap-4 text-sm text-gray-600">
+            <span>Reference:</span>
+            <span className="rounded bg-gray-200 px-2 py-1 font-mono text-xs">
+              {confirmationNumber}
+            </span>
+          </div>
         </div>
       </div>
 
       <div>
-        <h4 className="mb-3 font-semibold">Select Payment Method</h4>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <label className="mb-3 block text-sm font-bold">
+          Select Payment Method
+        </label>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {PAYMENT_OPTIONS.map((method) => (
             <button
               key={method}
               type="button"
               onClick={() => setSelectedMethod(method)}
-              disabled={isProcessing}
-              className={`rounded-xl border-2 p-4 text-center font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              disabled={isProcessing || success}
+              className={`relative rounded-xl border-2 p-4 text-center font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 selectedMethod === method
                   ? "border-blue-500 bg-blue-50 text-blue-900"
                   : "border-gray-300 bg-white text-gray-900 hover:border-blue-300"
               }`}
             >
               {getPaymentMethodLabel(method)}
-              {selectedMethod === method && <span className="ml-2">✓</span>}
+
+              {selectedMethod === method && (
+                <span className="absolute right-2 top-2 text-blue-500">✓</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          ❌ {error}
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <p className="text-sm font-semibold text-red-800">❌ {error}</p>
         </div>
       )}
 
       {success && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          ✓ Payment processed successfully! You will receive a confirmation email
-          shortly.
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <p className="text-sm font-semibold text-green-800">
+            ✓ Payment processed successfully.
+          </p>
         </div>
       )}
 
       {qrImageUrl && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-center">
-          <h4 className="text-lg font-bold text-blue-950">Scan QR Ph to Pay</h4>
-          <p className="mt-1 text-sm text-blue-800">
-            Open GCash, Maya, or any QR Ph-supported banking app, then scan this
-            code.
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center">
+          <h4 className="text-lg font-bold">Scan QR Ph to Pay</h4>
+
+          <p className="mt-2 text-sm text-gray-600">
+            Open GCash, Maya, or any QR Ph-supported banking app, then scan this code.
           </p>
 
-          {/* PayMongo returns a Base64 data URI. Use it directly as image src. */}
           <img
             src={qrImageUrl}
             alt="QR Ph payment code"
             className="mx-auto mt-4 h-64 w-64 rounded-xl border bg-white p-3"
           />
 
-          <p className="mt-3 text-xs text-blue-700">
+          <p className="mt-3 break-all text-xs text-gray-500">
             QR Payment ID: {qrPaymentId}
           </p>
-          <p className="mt-1 text-xs text-blue-700">
-            This QR code may expire. Generate a new one if the payment does not
-            continue.
+
+          <p className="mt-2 text-xs text-gray-500">
+            After paying QR Ph, open the tracker and wait for admin/payment confirmation if it does not update automatically.
           </p>
         </div>
       )}
 
-      <p className="text-xs text-gray-500">
-        Note: GCash and Maya redirect to PayMongo checkout. QR Ph displays a QR
-        code on this page.
-      </p>
+      <div className="rounded-xl bg-gray-100 p-3 text-xs text-gray-600">
+        <p>
+          <strong>Note:</strong> Your booking stays pending until payment is done.
+          After successful GCash/Maya payment, the booking status becomes approved.
+        </p>
+      </div>
 
-      {!success && !qrImageUrl && (
+      {!qrImageUrl && (
         <button
           type="button"
           onClick={handlePayment}
-          disabled={isProcessing || !selectedMethod}
-          className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+          disabled={paymentDisabled}
+          className={`w-full rounded-xl py-3 font-bold text-white transition-all ${
+            !paymentDisabled
+              ? "cursor-pointer bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              : "cursor-not-allowed bg-gray-400"
+          }`}
         >
-          {isProcessing ? "⏳ Processing..." : `Pay ₱${amount.toLocaleString()}`}
+          {isProcessing
+            ? "⏳ Redirecting to PayMongo..."
+            : selectedMethod
+              ? `Pay ₱${amount.toLocaleString()}`
+              : "Select payment method first"}
         </button>
       )}
 
@@ -205,6 +233,17 @@ export default function PaymentComponent({
           className="w-full rounded-xl border border-gray-300 px-5 py-3 font-semibold text-gray-800 transition hover:bg-gray-50"
         >
           Choose another payment method
+        </button>
+      )}
+
+      {showPayLater && onPayLater && (
+        <button
+          type="button"
+          onClick={onPayLater}
+          disabled={isProcessing}
+          className="w-full rounded-xl border border-gray-400 px-5 py-3 font-semibold text-gray-800 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Pay later and open tracker
         </button>
       )}
     </div>
