@@ -1,24 +1,17 @@
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-// const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabaseKey = supabaseAnonKey!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Skip validation during build time
-const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
+// Check if we're in build phase - allow missing env vars
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' ||
+  process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-if (!isBuildTime) {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase Environment Variables");
-  }
-
+// Only validate at runtime, not during build
+if (!isBuildTime && (typeof window === 'undefined')) {
   if (!supabaseUrl) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable.');
+    console.warn('Warning: NEXT_PUBLIC_SUPABASE_URL not set');
   }
-
-  if (!supabaseKey) {
-    throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable.'
-    );
+  if (!supabaseAnonKey) {
+    console.warn('Warning: NEXT_PUBLIC_SUPABASE_ANON_KEY not set');
   }
 }
 
@@ -28,15 +21,15 @@ export async function supabaseRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Missing Supabase Environment Variables");
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
       ...(init.headers || {}),
