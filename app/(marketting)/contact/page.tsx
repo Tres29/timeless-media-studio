@@ -557,7 +557,7 @@ export default function BookingForm() {
   return (
     <section className="min-h-screen bg-black px-4 py-24 text-white sm:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-12 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <div className="mb-12 grid gap-8 lg:grid-cols-2 lg:items-start">
           <div>
             <p className="mb-4 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-white/70">
               Book Now
@@ -570,9 +570,7 @@ export default function BookingForm() {
               <span className="block text-white/60">with us.</span>
             </h1>
 
-            <p className="mt-6 max-w-xl text-base leading-8 text-white/60">
-              After booking, you will receive a confirmation number for tracking.
-            </p>
+        
 
             <button
               type="button"
@@ -581,37 +579,12 @@ export default function BookingForm() {
             >
               Track Order
             </button>
-
-            <div className="mt-10 overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.06]">
-              <h3 className="px-5 pt-5 text-xl font-black">
-                Frequently Asked Questions
-              </h3>
-
-              {faqs.map((faq, index) => (
-                <div key={faq.question} className="border-t border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                    className="flex w-full items-center justify-between gap-4 p-4 text-left"
-                  >
-                    <span className="font-bold">{faq.question}</span>
-                    <span>{openFaq === index ? "−" : "+"}</span>
-                  </button>
-
-                  {openFaq === index && (
-                    <p className="px-4 pb-4 text-sm leading-7 text-white/60">
-                      {faq.answer}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
 
-          <div className="grid gap-6">
+          <div className="grid gap-6 lg:h-fit">
             <form
               onSubmit={openEmailDialog}
-              className="rounded-[32px] border border-white/10 bg-white/[0.08] p-5 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl sm:p-7"
+              className="rounded-[32px] border border-white/10 bg-white/[0.08] p-5 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_25px_80px_rgba(255,255,255,0.15)] sm:p-7"
             >
               <input
                 name="name"
@@ -619,7 +592,7 @@ export default function BookingForm() {
                 onChange={handleChange}
                 placeholder="Name"
                 required
-                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 hover:border-white/30"
               />
 
               <input
@@ -628,13 +601,13 @@ export default function BookingForm() {
                 onChange={handleChange}
                 placeholder="Phone Number"
                 required
-                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 hover:border-white/30"
               />
 
               <button
                 type="button"
                 onClick={() => setShowCalendar(true)}
-                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-left text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-left text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 hover:border-white/30"
               >
                 {form.date
                   ? new Date(form.date).toLocaleDateString("en-US", {
@@ -643,7 +616,7 @@ export default function BookingForm() {
                       month: "short",
                       day: "numeric",
                     })
-                  : "Select a date from calendar"}
+                  : "Book your schedule!"}
               </button>
 
               <select
@@ -651,9 +624,9 @@ export default function BookingForm() {
                 value={form.packageType}
                 onChange={handleChange}
                 required
-                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 hover:border-white/30"
               >
-                <option value="">Select Package</option>
+                <option value="">Choose your Package</option>
                 <option value="BASIC PACKAGE - ₱10">BASIC PACKAGE - ₱10</option>
                 <option value="ELITE PACKAGE - ₱20">ELITE PACKAGE - ₱20</option>
                 <option value="PREMIUM PACKAGE - ₱30">
@@ -666,7 +639,7 @@ export default function BookingForm() {
                 value={form.message}
                 onChange={handleChange}
                 placeholder="Message"
-                className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/90 p-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+                className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/90 p-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 hover:border-white/30"
               />
 
               <button
@@ -679,14 +652,39 @@ export default function BookingForm() {
               </button>
             </form>
 
-            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.08] p-4 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl">
-              <h3 className="mb-4 text-xl font-black sm:text-2xl">Find Us</h3>
+            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.08] p-5 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_25px_80px_rgba(255,255,255,0.15)]">
+              <h3 className="px-0 py-0 text-xl font-black transition-all duration-300">
+                Frequently Asked Questions
+              </h3>
 
-              <div className="overflow-hidden rounded-3xl border border-white/10">
+              {faqs.map((faq, index) => (
+                <div key={faq.question} className="border-t border-white/10 transition-all duration-300">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                    className="flex w-full items-center justify-between gap-4 p-4 text-left transition-all duration-300 hover:bg-white/5"
+                  >
+                    <span className="font-bold transition-all duration-300">{faq.question}</span>
+                    <span className="transition-transform duration-300">{openFaq === index ? "−" : "+"}</span>
+                  </button>
+
+                  {openFaq === index && (
+                    <p className="animate-in fade-in slide-in-from-top-2 px-4 pb-4 text-sm leading-7 text-white/60 duration-300">
+                      {faq.answer}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.08] p-4 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_25px_80px_rgba(255,255,255,0.15)]">
+              <h3 className="mb-4 text-xl font-black transition-all duration-300 sm:text-2xl">Find Us</h3>
+
+              <div className="overflow-hidden rounded-3xl border border-white/10 transition-all duration-500">
                 <iframe
                   title="Studio Location Map"
                   src="https://www.google.com/maps?q=Quezon%20City%20Philippines&output=embed"
-                  className="h-[260px] w-full border-0 sm:h-[320px]"
+                  className="h-[260px] w-full border-0 transition-all duration-500 sm:h-[320px]"
                   loading="lazy"
                   allowFullScreen
                 />
