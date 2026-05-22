@@ -19,13 +19,11 @@ export default function BookingCalendar({
 }: BookingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [bookingCounts, setBookingCounts] = useState<DateBookingCount>({});
-  const [loading, setLoading] = useState(true);
 
   // Fetch booking counts for the month
   useEffect(() => {
     const fetchBookingCounts = async () => {
       try {
-        setLoading(true);
         const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
         const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
@@ -39,8 +37,6 @@ export default function BookingCalendar({
         }
       } catch (error) {
         console.error("Failed to fetch booking counts:", error);
-      } finally {
-        setLoading(false);
       }
     };
 

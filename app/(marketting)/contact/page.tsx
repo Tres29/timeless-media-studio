@@ -93,7 +93,6 @@ export default function BookingForm() {
   const [emailProvider, setEmailProvider] = useState<EmailProvider | "">("");
   const [confirmationNumber, setConfirmationNumber] = useState("");
   const [showPaymentStep, setShowPaymentStep] = useState(false);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [savedBookingData, setSavedBookingData] = useState<{
     name: string;
     email: string;
@@ -321,7 +320,6 @@ export default function BookingForm() {
 
   const handlePaymentSuccess = (paymentId: string) => {
     console.log("✓ Payment successful:", paymentId);
-    setPaymentProcessing(false);
     setShowPaymentStep(false);
 
     if (savedBookingData) {
@@ -341,7 +339,6 @@ export default function BookingForm() {
 
   const handlePaymentError = (error: string) => {
     console.error("❌ Payment error:", error);
-    setPaymentProcessing(false);
   };
 
   const closePaymentStep = () => {
@@ -350,11 +347,6 @@ export default function BookingForm() {
     if (savedBookingData) {
       setConfirmationNumber(savedBookingData.confirmationNumber);
     }
-  };
-
-  const cancelPaymentStep = () => {
-    setShowPaymentStep(false);
-    setSavedBookingData(null);
   };
 
   const cancelBooking = async () => {

@@ -36,8 +36,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Count bookings per date
+    interface BookingRecord {
+      booking_date: string;
+    }
     const bookingCounts: Record<string, number> = {};
-    bookings?.forEach((booking: any) => {
+    (bookings as BookingRecord[])?.forEach((booking: BookingRecord) => {
       const date = booking.booking_date;
       bookingCounts[date] = (bookingCounts[date] || 0) + 1;
     });
