@@ -38,8 +38,7 @@ function PaymentSuccessContent() {
           return;
         }
 
-        setMessage("Payment done. Booking approved. Returning to booking tracker...");
-
+        setMessage("Payment done. Booking approved. Returning to tracker...");
         window.location.href = `/contact?track=${encodeURIComponent(
           confirmationNumber
         )}`;

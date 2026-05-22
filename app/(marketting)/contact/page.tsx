@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useState,
   type ChangeEvent,
   type FormEvent,
@@ -43,6 +44,14 @@ type BookingLog = FormState & {
   status: BookingStatus;
 };
 
+const emptyForm: FormState = {
+  name: "",
+  phone: "",
+  date: "",
+  packageType: "",
+  message: "",
+};
+
 const faqs = [
   {
     question: "How do I track my booking?",
@@ -60,37 +69,27 @@ const faqs = [
 ];
 
 export default function BookingForm() {
-  const [form, setForm] = useState<FormState>({
-    name: "",
-    phone: "",
-    date: "",
-    packageType: "",
-    message: "",
-  });
-
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showTrackerModal, setShowTrackerModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+
   const [trackerCode, setTrackerCode] = useState("");
   const [trackerLoading, setTrackerLoading] = useState(false);
   const [trackerError, setTrackerError] = useState("");
   const [trackerMessage, setTrackerMessage] = useState("");
   const [trackedBooking, setTrackedBooking] = useState<BookingLog | null>(null);
+  const [showTrackerPayment, setShowTrackerPayment] = useState(false);
+
   const [isEditingBooking, setIsEditingBooking] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-
-  const [editBooking, setEditBooking] = useState<FormState>({
-    name: "",
-    phone: "",
-    date: "",
-    packageType: "",
-    message: "",
-  });
+  const [editBooking, setEditBooking] = useState<FormState>(emptyForm);
 
   const [dialogEmail, setDialogEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [emailProvider, setEmailProvider] = useState<EmailProvider | "">("");
+
   const [confirmationNumber, setConfirmationNumber] = useState("");
   const [showPaymentStep, setShowPaymentStep] = useState(false);
   const [savedBookingData, setSavedBookingData] = useState<{
@@ -100,6 +99,25 @@ export default function BookingForm() {
     packageType: string;
     confirmationNumber: string;
   } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const trackCode = params.get("track");
+
+    if (!trackCode) return;
+
+    setTrackerCode(trackCode);
+    setShowTrackerModal(true);
+
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    if (showTrackerModal && trackerCode && !trackedBooking) {
+      void trackBooking(trackerCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTrackerModal, trackerCode]);
 
   const generateConfirmationNumber = () => {
     const year = new Date().getFullYear();
@@ -169,25 +187,25 @@ export default function BookingForm() {
   };
 
   const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setForm({
       ...form,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     });
   };
 
   const handleEditChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setEditBooking({
       ...editBooking,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     });
   };
 
-  const openEmailDialog = (e: FormEvent) => {
-    e.preventDefault();
+  const openEmailDialog = (event: FormEvent) => {
+    event.preventDefault();
     setDialogEmail("");
     setEmailError("Email is required.");
     setEmailProvider("");
@@ -196,9 +214,7 @@ export default function BookingForm() {
 
   const handleEmailChange = (value: string) => {
     setDialogEmail(value);
-
     const result = validateEmail(value);
-
     setEmailError(result.error);
     setEmailProvider(result.provider);
   };
@@ -215,10 +231,11 @@ export default function BookingForm() {
     setTrackerMessage("");
     setTrackedBooking(null);
     setIsEditingBooking(false);
+    setShowTrackerPayment(false);
   };
 
-  const trackBooking = async () => {
-    if (!trackerCode.trim()) {
+  const trackBooking = async (code = trackerCode) => {
+    if (!code.trim()) {
       setTrackerError("Please enter your confirmation number.");
       return;
     }
@@ -226,12 +243,11 @@ export default function BookingForm() {
     setTrackerLoading(true);
     setTrackerError("");
     setTrackerMessage("");
+    setShowTrackerPayment(false);
 
     try {
       const response = await fetch(
-        `/api/bookings?confirmationNumber=${encodeURIComponent(
-          trackerCode.trim()
-        )}`
+        `/api/bookings?confirmationNumber=${encodeURIComponent(code.trim())}`
       );
 
       const data = await response.json().catch(() => null);
@@ -308,7 +324,6 @@ export default function BookingForm() {
         ...trackedBooking,
         ...editBooking,
       });
-
       setTrackerMessage("Booking updated successfully.");
       setIsEditingBooking(false);
     } catch {
@@ -318,35 +333,99 @@ export default function BookingForm() {
     }
   };
 
-  const handlePaymentSuccess = (paymentId: string) => {
-    console.log("✓ Payment successful:", paymentId);
-    setShowPaymentStep(false);
+  const approveBookingAfterPayment = async (bookingCode: string) => {
+    const response = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        confirmationNumber: bookingCode,
+        status: "approved",
+      }),
+    });
 
-    if (savedBookingData) {
-      setConfirmationNumber(savedBookingData.confirmationNumber);
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Payment done, but booking approval failed.");
     }
 
-    // Reset form after successful payment
-    setForm({
-      name: "",
-      phone: "",
-      date: "",
-      packageType: "",
-      message: "",
-    });
+    return data;
+  };
+
+  const handlePaymentSuccess = async (paymentId: string) => {
+    console.log("✓ Payment successful:", paymentId);
+
+    if (!savedBookingData) return;
+
+    try {
+      await approveBookingAfterPayment(savedBookingData.confirmationNumber);
+      setTrackerMessage("Payment done. Your booking is approved.");
+    } catch (error) {
+      setTrackerError(
+        error instanceof Error
+          ? error.message
+          : "Payment done, but booking approval failed."
+      );
+    }
+
+    setShowPaymentStep(false);
+    setConfirmationNumber(savedBookingData.confirmationNumber);
+    setTrackerCode(savedBookingData.confirmationNumber);
+    setShowTrackerModal(true);
+
+    setForm(emptyForm);
     setSavedBookingData(null);
+  };
+
+  const handleTrackerPaymentSuccess = async (paymentId: string) => {
+    console.log("✓ Tracker payment successful:", paymentId);
+
+    if (!trackedBooking) return;
+
+    try {
+      const updatedBooking = await approveBookingAfterPayment(
+        trackedBooking.confirmationNumber
+      );
+
+      setTrackedBooking({
+        ...trackedBooking,
+        status: "approved",
+      });
+      setShowTrackerPayment(false);
+      setTrackerMessage("Payment done. Your booking is approved.");
+
+      if (updatedBooking?.status) {
+        setTrackedBooking({
+          ...trackedBooking,
+          status: updatedBooking.status,
+        });
+      }
+    } catch (error) {
+      setTrackerError(
+        error instanceof Error
+          ? error.message
+          : "Payment done, but booking approval failed."
+      );
+    }
   };
 
   const handlePaymentError = (error: string) => {
     console.error("❌ Payment error:", error);
+    setTrackerError(error);
   };
 
   const closePaymentStep = () => {
     setShowPaymentStep(false);
-    setSavedBookingData(null);
+
     if (savedBookingData) {
       setConfirmationNumber(savedBookingData.confirmationNumber);
+      setTrackerCode(savedBookingData.confirmationNumber);
+      setShowTrackerModal(true);
     }
+
+    setSavedBookingData(null);
   };
 
   const cancelBooking = async () => {
@@ -390,7 +469,6 @@ export default function BookingForm() {
         ...trackedBooking,
         status: "cancelled",
       });
-
       setTrackerMessage("Booking cancelled successfully.");
     } catch {
       setTrackerError("Failed to cancel booking.");
@@ -421,8 +499,6 @@ export default function BookingForm() {
     };
 
     try {
-      console.log("📝 Saving booking...", bookingPayload);
-      
       const bookingResponse = await fetch("/api/bookings", {
         method: "POST",
         headers: {
@@ -433,17 +509,12 @@ export default function BookingForm() {
 
       const savedBooking = await bookingResponse.json().catch(() => null);
 
-      console.log("Response status:", bookingResponse.status, "Data:", savedBooking);
-
       if (!bookingResponse.ok) {
-        const errorMsg = savedBooking?.error || "Failed to save booking.";
-        console.error("❌ Booking error:", errorMsg);
-        setEmailError(errorMsg);
+        setEmailError(savedBooking?.error || "Failed to save booking.");
         return;
       }
 
       if (!savedBooking) {
-        console.error("❌ No booking data returned");
         setEmailError("Failed to retrieve booking confirmation.");
         return;
       }
@@ -451,9 +522,6 @@ export default function BookingForm() {
       const finalConfirmationNumber =
         savedBooking.confirmation_number || generatedConfirmation;
 
-      console.log("✓ Booking saved:", finalConfirmationNumber);
-
-      // Store booking data for payment step
       setSavedBookingData({
         name: form.name,
         email: cleanEmail,
@@ -462,13 +530,9 @@ export default function BookingForm() {
         confirmationNumber: finalConfirmationNumber,
       });
 
-      // Close email dialog and show payment step - ensure both happen together
       setShowEmailDialog(false);
       setShowPaymentStep(true);
 
-      console.log("💳 Payment step initiated");
-
-      // Send confirmation email (non-blocking)
       fetch("/api/send-confirmation", {
         method: "POST",
         headers: {
@@ -478,11 +542,12 @@ export default function BookingForm() {
           ...bookingPayload,
           confirmationNumber: finalConfirmationNumber,
         }),
-      }).catch((err) => console.error("Email send error:", err));
+      }).catch((error) => console.error("Email send error:", error));
     } catch (error) {
-      console.error("❌ Booking process error:", error);
       setEmailError(
-        error instanceof Error ? error.message : "Failed to connect to booking database."
+        error instanceof Error
+          ? error.message
+          : "Failed to connect to booking database."
       );
     } finally {
       setSending(false);
@@ -490,199 +555,152 @@ export default function BookingForm() {
   };
 
   return (
-    <section className="relative min-h-screen overflow-hidden bg-[#050505] px-5 pb-12 pt-28 font-sans text-white sm:px-8 sm:pt-32 lg:pt-36">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.16),transparent_28%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.1),transparent_30%)]" />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/5 blur-3xl" />
+    <section className="min-h-screen bg-black px-4 py-24 text-white sm:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-12 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <p className="mb-4 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-white/70">
+              Book Now
+            </p>
 
-      <div className="relative mx-auto grid w-full max-w-7xl grid-cols-1 items-start gap-10 lg:grid-cols-2 lg:items-center">
-        <div className="flex flex-col justify-center text-center lg:text-left">
-          <p className="mb-4 text-sm font-black uppercase tracking-[0.35em] text-white/70">
-            Book Now
-          </p>
+            <h1 className="text-5xl font-black leading-tight sm:text-7xl">
+              Make your
+              <span className="block text-white/60">memories</span>
+              documented
+              <span className="block text-white/60">with us.</span>
+            </h1>
 
-          <h1 className="mx-auto max-w-3xl text-[42px] font-black leading-[0.95] tracking-[-0.05em] text-[#d7d7d7] drop-shadow-2xl sm:text-[64px] lg:mx-0 lg:text-[88px]">
-            Make your
-            <br />
-            memories
-            <br />
-            documented
-            <br />
-            with us.
-          </h1>
+            <p className="mt-6 max-w-xl text-base leading-8 text-white/60">
+              After booking, you will receive a confirmation number for tracking.
+            </p>
 
-          <div className="mx-auto mb-6 mt-8 h-px w-full max-w-xl bg-gradient-to-r from-transparent via-white/60 to-transparent lg:mx-0 lg:bg-gradient-to-r lg:from-white/60 lg:to-transparent" />
+            <button
+              type="button"
+              onClick={openTrackerModal}
+              className="mt-8 rounded-2xl border border-white/15 bg-white px-6 py-3 font-black uppercase tracking-[0.15em] text-black transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] active:scale-95"
+            >
+              Track Order
+            </button>
 
-          <p className="mx-auto max-w-md text-base leading-7 text-white/55 lg:mx-0">
-            After booking, you will receive a confirmation number for tracking.
-          </p>
+            <div className="mt-10 overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.06]">
+              <h3 className="px-5 pt-5 text-xl font-black">
+                Frequently Asked Questions
+              </h3>
 
-          <button
-            type="button"
-            onClick={openTrackerModal}
-            className="mx-auto mt-8 rounded-2xl bg-white px-8 py-4 font-black uppercase tracking-[0.18em] text-black shadow-[0_16px_45px_rgba(255,255,255,0.18)] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03] active:scale-95 lg:mx-0"
-          >
-            Track Order
-          </button>
-
-          <div className="mx-auto mt-10 w-full max-w-md rounded-[32px] border border-white/10 bg-white/[0.08] p-5 text-left shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl lg:mx-0 lg:max-w-none sm:p-6">
-            <h3 className="mb-4 text-xl font-black sm:text-2xl">
-              Frequently Asked Questions
-            </h3>
-
-            <div className="space-y-3">
               {faqs.map((faq, index) => (
-                <div
-                  key={faq.question}
-                  className="overflow-hidden rounded-3xl bg-white/[0.06] transition hover:bg-white/[0.1]"
-                >
+                <div key={faq.question} className="border-t border-white/10">
                   <button
                     type="button"
                     onClick={() => setOpenFaq(openFaq === index ? null : index)}
                     className="flex w-full items-center justify-between gap-4 p-4 text-left"
                   >
-                    <span className="font-black">{faq.question}</span>
-                    <span
-                      className={`text-xl transition-transform duration-300 ${
-                        openFaq === index ? "rotate-45" : ""
-                      }`}
-                    >
-                      +
-                    </span>
+                    <span className="font-bold">{faq.question}</span>
+                    <span>{openFaq === index ? "−" : "+"}</span>
                   </button>
 
-                  <div
-                    className={`grid transition-all duration-300 ease-in-out ${
-                      openFaq === index
-                        ? "grid-rows-[1fr] opacity-100"
-                        : "grid-rows-[0fr] opacity-0"
-                    }`}
-                  >
-                    <div className="overflow-hidden">
-                      <p className="px-4 pb-4 text-sm leading-6 text-white/60">
-                        {faq.answer}
-                      </p>
-                    </div>
-                  </div>
+                  {openFaq === index && (
+                    <p className="px-4 pb-4 text-sm leading-7 text-white/60">
+                      {faq.answer}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="mx-auto w-full max-w-md space-y-6 lg:max-w-none">
-          <form
-            onSubmit={openEmailDialog}
-            className="w-full rounded-[32px] border border-white/10 bg-white/[0.08] p-6 shadow-[0_30px_120px_rgba(255,255,255,0.12)] backdrop-blur-2xl transition-all duration-500 hover:border-white/20 hover:bg-white/[0.1] sm:p-9"
-          >
-            <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
-              Name
-            </label>
-            <input
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-              placeholder="Your full name"
-              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 placeholder:text-gray-500 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
-            />
-
-            <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
-              Phone Number
-            </label>
-            <input
-              name="phone"
-              value={form.phone}
-              onChange={handleChange}
-              required
-              placeholder="09XXXXXXXXX"
-              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 placeholder:text-gray-500 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
-            />
-
-            <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
-              Date
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowCalendar(true)}
-              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20 font-semibold text-left"
+          <div className="grid gap-6">
+            <form
+              onSubmit={openEmailDialog}
+              className="rounded-[32px] border border-white/10 bg-white/[0.08] p-5 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl sm:p-7"
             >
-              {form.date ? (
-                <>
-                  📅 {new Date(form.date).toLocaleDateString("en-US", {
-                    weekday: "short",
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </>
-              ) : (
-                "📅 Select a date from calendar"
-              )}
-            </button>
-
-            <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
-              Package
-            </label>
-            <select
-              title="package"
-              name="packageType"
-              value={form.packageType}
-              onChange={handleChange}
-              required
-              className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
-            >
-              <option value="">Select Package</option>
-              <option value="BASIC PACKAGE - ₱10">BASIC PACKAGE - ₱10</option>
-              <option value="ELITE PACKAGE - ₱20">ELITE PACKAGE - ₱20</option>
-              <option value="PREMIUM PACKAGE - ₱30">
-                PREMIUM PACKAGE - ₱30
-              </option>
-            </select>
-
-            <label className="mb-2 block text-xs font-black uppercase tracking-[0.22em] text-white/80">
-              Message
-            </label>
-            <textarea
-              name="message"
-              value={form.message}
-              onChange={handleChange}
-              required
-              placeholder="Tell us more about your booking..."
-              className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/90 px-4 py-3 text-sm text-black outline-none transition-all duration-300 placeholder:text-gray-500 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
-            />
-
-            <button
-              type="submit"
-              className="group relative mt-7 w-full overflow-hidden rounded-2xl bg-white py-4 font-black uppercase tracking-[0.18em] text-black shadow-[0_16px_45px_rgba(255,255,255,0.18)] transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.96]"
-            >
-              <span className="relative flex items-center justify-center gap-3">
-                Submit Booking
-                <span>→</span>
-              </span>
-            </button>
-          </form>
-
-          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.08] p-4 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl">
-            <h3 className="mb-4 text-xl font-black sm:text-2xl">Find Us</h3>
-
-            <div className="overflow-hidden rounded-3xl border border-white/10">
-              <iframe
-                title="Studio Location Map"
-                src="https://www.google.com/maps?q=Quezon%20City%20Philippines&output=embed"
-                className="h-[260px] w-full border-0 sm:h-[320px]"
-                loading="lazy"
-                allowFullScreen
+              <input
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                placeholder="Name"
+                required
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
               />
-            </div>
 
-            <a
-              href="https://www.google.com/maps/search/?api=1&query=Quezon+City+Philippines"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 block rounded-2xl bg-white py-3 text-center font-black text-black transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] active:scale-95"
-            >
-              Open in Google Maps
-            </a>
+              <input
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+                placeholder="Phone Number"
+                required
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowCalendar(true)}
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-left text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+              >
+                {form.date
+                  ? new Date(form.date).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })
+                  : "Select a date from calendar"}
+              </button>
+
+              <select
+                name="packageType"
+                value={form.packageType}
+                onChange={handleChange}
+                required
+                className="mb-4 h-12 w-full rounded-2xl border border-white/10 bg-white/90 px-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+              >
+                <option value="">Select Package</option>
+                <option value="BASIC PACKAGE - ₱10">BASIC PACKAGE - ₱10</option>
+                <option value="ELITE PACKAGE - ₱20">ELITE PACKAGE - ₱20</option>
+                <option value="PREMIUM PACKAGE - ₱30">
+                  PREMIUM PACKAGE - ₱30
+                </option>
+              </select>
+
+              <textarea
+                name="message"
+                value={form.message}
+                onChange={handleChange}
+                placeholder="Message"
+                className="h-32 w-full resize-none rounded-2xl border border-white/10 bg-white/90 p-4 text-sm font-semibold text-black outline-none transition-all duration-300 focus:border-white focus:bg-white focus:ring-4 focus:ring-white/20"
+              />
+
+              <button
+                type="submit"
+                className="group relative mt-7 w-full overflow-hidden rounded-2xl bg-white py-4 font-black uppercase tracking-[0.18em] text-black shadow-[0_16px_45px_rgba(255,255,255,0.18)] transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.96]"
+              >
+                <span className="relative flex items-center justify-center gap-3">
+                  Submit Booking <span>→</span>
+                </span>
+              </button>
+            </form>
+
+            <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.08] p-4 shadow-[0_25px_80px_rgba(255,255,255,0.1)] backdrop-blur-2xl">
+              <h3 className="mb-4 text-xl font-black sm:text-2xl">Find Us</h3>
+
+              <div className="overflow-hidden rounded-3xl border border-white/10">
+                <iframe
+                  title="Studio Location Map"
+                  src="https://www.google.com/maps?q=Quezon%20City%20Philippines&output=embed"
+                  className="h-[260px] w-full border-0 sm:h-[320px]"
+                  loading="lazy"
+                  allowFullScreen
+                />
+              </div>
+
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=Quezon+City+Philippines"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 block rounded-2xl bg-white py-3 text-center font-black text-black transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] active:scale-95"
+              >
+                Open in Google Maps
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -695,7 +713,7 @@ export default function BookingForm() {
             <input
               type="email"
               value={dialogEmail}
-              onChange={(e) => handleEmailChange(e.target.value)}
+              onChange={(event) => handleEmailChange(event.target.value)}
               placeholder="example@gmail.com"
               className="mt-4 h-12 w-full rounded-2xl bg-white/90 px-4 text-sm text-black outline-none"
             />
@@ -724,7 +742,7 @@ export default function BookingForm() {
               <button
                 type="button"
                 onClick={confirmBooking}
-                disabled={sending}
+                disabled={sending || !!emailError}
                 className="w-1/2 rounded-2xl bg-white py-3 font-black text-black disabled:opacity-60"
               >
                 {sending ? "SENDING..." : "CONFIRM"}
@@ -735,8 +753,8 @@ export default function BookingForm() {
       )}
 
       {showPaymentStep && savedBookingData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm" style={{ visibility: showPaymentStep ? 'visible' : 'hidden' }}>
-          <div className="w-full max-w-2xl rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-2xl font-black">Complete Your Payment</h2>
 
@@ -749,12 +767,14 @@ export default function BookingForm() {
               </button>
             </div>
 
-            <div className="mb-6 rounded-2xl bg-white/[0.08] border border-white/10 p-4">
-              <p className="text-sm text-white/60 mb-2">Booking Confirmation</p>
-              <p className="text-lg font-black">{savedBookingData.confirmationNumber}</p>
+            <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.08] p-4">
+              <p className="mb-2 text-sm text-white/60">Booking Confirmation</p>
+              <p className="text-lg font-black">
+                {savedBookingData.confirmationNumber}
+              </p>
             </div>
 
-            <div className="rounded-lg overflow-hidden bg-white">
+            <div className="overflow-hidden rounded-lg bg-white">
               <PaymentComponent
                 packageType={savedBookingData.packageType}
                 name={savedBookingData.name}
@@ -763,16 +783,10 @@ export default function BookingForm() {
                 confirmationNumber={savedBookingData.confirmationNumber}
                 onPaymentSuccess={handlePaymentSuccess}
                 onPaymentError={handlePaymentError}
+                onPayLater={closePaymentStep}
+                showPayLater
               />
             </div>
-
-            <button
-              type="button"
-              onClick={closePaymentStep}
-              className="mt-6 w-full rounded-2xl bg-white/10 py-3 font-bold text-white hover:bg-white/20 transition-all"
-            >
-              Skip for Now
-            </button>
           </div>
         </div>
       )}
@@ -830,14 +844,14 @@ export default function BookingForm() {
 
             <input
               value={trackerCode}
-              onChange={(e) => setTrackerCode(e.target.value)}
+              onChange={(event) => setTrackerCode(event.target.value)}
               placeholder="BK-2026-123456"
               className="mb-4 h-12 w-full rounded-2xl bg-white px-4 text-black"
             />
 
             <button
               type="button"
-              onClick={trackBooking}
+              onClick={() => trackBooking()}
               disabled={trackerLoading}
               className="w-full rounded-2xl bg-white py-3 font-black text-black disabled:opacity-60"
             >
@@ -921,6 +935,62 @@ export default function BookingForm() {
                       </div>
                     </div>
 
+                    {trackedBooking.status === "pending" && (
+                      <div className="rounded-3xl border border-yellow-400/30 bg-yellow-500/10 p-5">
+                        <h3 className="text-xl font-black text-yellow-100">
+                          Pending Payment
+                        </h3>
+
+                        <p className="mt-2 text-sm leading-6 text-yellow-100/80">
+                          This booking is saved, but payment is not completed yet.
+                          Click Pay Now to continue payment. After successful
+                          payment, your booking status will automatically change to
+                          approved.
+                        </p>
+
+                        {!showTrackerPayment ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowTrackerPayment(true)}
+                            className="mt-4 w-full rounded-2xl bg-green-600 py-3 font-black text-white transition hover:bg-green-700 active:scale-95"
+                          >
+                            Pay Now
+                          </button>
+                        ) : (
+                          <div className="mt-4 overflow-hidden rounded-2xl bg-white">
+                            <PaymentComponent
+                              packageType={trackedBooking.packageType}
+                              name={trackedBooking.name}
+                              email={trackedBooking.email}
+                              phone={trackedBooking.phone}
+                              confirmationNumber={
+                                trackedBooking.confirmationNumber
+                              }
+                              onPaymentSuccess={handleTrackerPaymentSuccess}
+                              onPaymentError={handlePaymentError}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => setShowTrackerPayment(false)}
+                              className="w-full bg-gray-100 py-3 font-bold text-black transition hover:bg-gray-200"
+                            >
+                              Cancel Payment
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {trackedBooking.status === "approved" && (
+                      <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 text-green-100">
+                        <h3 className="font-black">Payment Done</h3>
+                        <p className="mt-2 text-sm">
+                          Your booking is approved.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="flex gap-3">
                       <button
                         type="button"
@@ -942,8 +1012,7 @@ export default function BookingForm() {
                           trackerLoading || isCancelDisabled(trackedBooking.status)
                         }
                         className={`w-1/2 rounded-2xl py-3 font-black text-white transition-all duration-300 ${
-                          trackerLoading ||
-                          isCancelDisabled(trackedBooking.status)
+                          trackerLoading || isCancelDisabled(trackedBooking.status)
                             ? "cursor-not-allowed bg-gray-500 opacity-50"
                             : "bg-red-500 hover:bg-red-600 active:scale-95"
                         }`}
@@ -1047,7 +1116,7 @@ export default function BookingForm() {
 
       {showCalendar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[32px] border border-white/10 bg-[#141414] p-6 text-white shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-2xl font-black">Select Date</h2>
 
@@ -1063,7 +1132,10 @@ export default function BookingForm() {
             <BookingCalendar
               selectedDate={form.date}
               onDateSelect={(date) => {
-                setForm({ ...form, date });
+                setForm({
+                  ...form,
+                  date,
+                });
                 setShowCalendar(false);
               }}
               maxBookingsPerDay={5}
@@ -1072,7 +1144,7 @@ export default function BookingForm() {
             <button
               type="button"
               onClick={() => setShowCalendar(false)}
-              className="mt-6 w-full rounded-2xl bg-white/10 py-3 font-bold text-white hover:bg-white/20 transition-all"
+              className="mt-6 w-full rounded-2xl bg-white/10 py-3 font-bold text-white transition-all hover:bg-white/20"
             >
               Close
             </button>

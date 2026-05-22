@@ -20,7 +20,6 @@ interface PaymentComponentProps {
 const PAYMENT_OPTIONS: PaymentMethod[] = [
   PAYMENT_METHODS.GCASH,
   PAYMENT_METHODS.MAYA,
-  PAYMENT_METHODS.QRPH,
 ];
 
 export default function PaymentComponent({
@@ -34,12 +33,12 @@ export default function PaymentComponent({
   onPayLater,
   showPayLater = false,
 }: PaymentComponentProps) {
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
+    null
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [qrImageUrl, setQrImageUrl] = useState("");
-  const [qrPaymentId, setQrPaymentId] = useState("");
 
   const amount = PACKAGE_PRICES[packageType] || 0;
   const paymentDisabled = !selectedMethod || isProcessing || success;
@@ -57,8 +56,6 @@ export default function PaymentComponent({
 
     setIsProcessing(true);
     setError("");
-    setQrImageUrl("");
-    setQrPaymentId("");
 
     try {
       const paymentResponse = await createPaymentSource({
@@ -71,12 +68,6 @@ export default function PaymentComponent({
         phone,
         name,
       });
-
-      if (paymentResponse.qrImageUrl) {
-        setQrImageUrl(paymentResponse.qrImageUrl);
-        setQrPaymentId(paymentResponse.paymentIntentId || paymentResponse.id);
-        return;
-      }
 
       if (paymentResponse.checkoutUrl) {
         window.location.href = paymentResponse.checkoutUrl;
@@ -137,7 +128,7 @@ export default function PaymentComponent({
           Select Payment Method
         </label>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PAYMENT_OPTIONS.map((method) => (
             <button
               key={method}
@@ -166,64 +157,29 @@ export default function PaymentComponent({
         </div>
       )}
 
-      {qrImageUrl && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center">
-          <h4 className="text-lg font-bold">Scan QR Ph to Pay</h4>
-
-          <p className="mt-2 text-sm text-gray-600">
-            Open GCash, Maya, or any QR Ph-supported banking app, then scan this code.
-          </p>
-
-          <img
-            src={qrImageUrl}
-            alt="QR Ph payment code"
-            className="mx-auto mt-4 h-64 w-64 rounded-xl border bg-white p-3"
-          />
-
-          <p className="mt-3 break-all text-xs text-gray-500">
-            QR Payment ID: {qrPaymentId}
-          </p>
-        </div>
-      )}
-
       <div className="rounded-xl bg-gray-100 p-3 text-xs text-gray-600">
         <p>
-          <strong>Note:</strong> Your booking stays pending if you choose Pay Later.
-          After successful GCash/Maya payment, your booking status becomes approved.
+          <strong>Note:</strong> Your booking stays pending if you choose Pay
+          Later. After successful payment, your booking status becomes approved.
         </p>
       </div>
 
-      {!qrImageUrl && (
-        <button
-          type="button"
-          onClick={handlePayment}
-          disabled={paymentDisabled}
-          className={`w-full rounded-xl py-3 font-bold text-white transition-all ${
-            !paymentDisabled
-              ? "cursor-pointer bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-              : "cursor-not-allowed bg-gray-400"
-          }`}
-        >
-          {isProcessing
-            ? "⏳ Redirecting to PayMongo..."
-            : selectedMethod
-              ? `Pay ₱${amount.toLocaleString()}`
-              : "Select payment method first"}
-        </button>
-      )}
-
-      {qrImageUrl && (
-        <button
-          type="button"
-          onClick={() => {
-            setQrImageUrl("");
-            setQrPaymentId("");
-          }}
-          className="w-full rounded-xl border border-gray-300 px-5 py-3 font-semibold text-gray-800 transition hover:bg-gray-50"
-        >
-          Choose another payment method
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={handlePayment}
+        disabled={paymentDisabled}
+        className={`w-full rounded-xl py-3 font-bold text-white transition-all ${
+          !paymentDisabled
+            ? "cursor-pointer bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+            : "cursor-not-allowed bg-gray-400"
+        }`}
+      >
+        {isProcessing
+          ? "⏳ Redirecting to PayMongo..."
+          : selectedMethod
+            ? `Pay ₱${amount.toLocaleString()}`
+            : "Select payment method first"}
+      </button>
 
       {showPayLater && onPayLater && (
         <button
