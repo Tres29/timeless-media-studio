@@ -52,8 +52,8 @@ export async function POST(req: Request) {
           amount: Math.round(paymentData.amount * 100), // Convert to cents
           currency: paymentData.currency || 'PHP',
           redirect: {
-            success: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment/success`,
-            failed: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment/failed`,
+            success: `${process.env.NEXT_PUBLIC_APP_URL || 'https://timeless-media.vercel.app/'}/payment/success`,
+            failed: `${process.env.NEXT_PUBLIC_APP_URL || 'https://timeless-media.vercel.app/'}/payment/failed`,
           },
           billing: {
             name: paymentData.name,
