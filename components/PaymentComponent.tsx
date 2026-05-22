@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from 'react';
-import { createPaymentSource, getPaymentMethodLabel } from '@/lib/payment-utils';
-import { PAYMENT_METHODS, PACKAGE_PRICES } from '@/lib/payment-config';
-import type { PaymentMethod } from '@/lib/payment-config';
+import { useState } from "react";
+import { createPaymentSource, getPaymentMethodLabel } from "@/lib/payment-utils";
+import { PAYMENT_METHODS, PACKAGE_PRICES, type PaymentMethod } from "@/lib/payment-config";
 
 interface PaymentComponentProps {
   packageType: string;
@@ -26,32 +25,32 @@ export default function PaymentComponent({
 }: PaymentComponentProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [qrImageUrl, setQrImageUrl] = useState("");
+  const [paymentId, setPaymentId] = useState("");
 
   const amount = PACKAGE_PRICES[packageType] || 0;
 
   const handlePayment = async () => {
     if (!selectedMethod) {
-      setError('Please select a payment method');
+      setError("Please select a payment method");
       return;
     }
 
     if (!amount || amount <= 0) {
-      setError('Invalid package price');
+      setError("Invalid package price");
       return;
     }
 
     setIsProcessing(true);
-    setError('');
+    setError("");
+    setQrImageUrl("");
 
     try {
-      console.log(`💳 Processing ${selectedMethod.toUpperCase()} payment...`);
-      console.log(`Amount: ₱${amount}, Reference: ${confirmationNumber}`);
-
       const paymentResponse = await createPaymentSource({
         amount,
-        currency: 'PHP',
+        currency: "PHP",
         description: `Timeless Media Studio - ${packageType}`,
         method: selectedMethod,
         referenceId: confirmationNumber,
@@ -60,22 +59,24 @@ export default function PaymentComponent({
         name,
       });
 
-      console.log('✓ Payment created:', paymentResponse.id);
-      console.log('Checkout URL:', paymentResponse.checkoutUrl);
+      setPaymentId(paymentResponse.id);
 
-      if (paymentResponse.checkoutUrl) {
-        // Redirect to payment gateway (for GCash/Maya)
-        console.log('🔄 Redirecting to payment gateway...');
-        window.location.href = paymentResponse.checkoutUrl;
-      } else {
-        // Payment successful (for instant methods)
-        console.log('✓ Payment processed instantly');
+      if (paymentResponse.qrImageUrl) {
+        setQrImageUrl(paymentResponse.qrImageUrl);
         setSuccess(true);
         onPaymentSuccess?.(paymentResponse.id);
+        return;
       }
+
+      if (paymentResponse.checkoutUrl) {
+        window.location.href = paymentResponse.checkoutUrl;
+        return;
+      }
+
+      setSuccess(true);
+      onPaymentSuccess?.(paymentResponse.id);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Payment processing failed';
-      console.error('❌ Payment error:', errorMsg);
+      const errorMsg = err instanceof Error ? err.message : "Payment processing failed";
       setError(errorMsg);
       onPaymentError?.(errorMsg);
     } finally {
@@ -85,107 +86,87 @@ export default function PaymentComponent({
 
   if (!amount || amount <= 0) {
     return (
-      <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4">
-        <p className="text-yellow-800 text-sm">
-          📌 Payment information will be displayed once you select a package.
-        </p>
+      <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800">
+        📌 Payment information will be displayed once you select a package.
       </div>
     );
   }
 
+  const paymentMethods: PaymentMethod[] = [
+    PAYMENT_METHODS.GCASH,
+    PAYMENT_METHODS.MAYA,
+    PAYMENT_METHODS.QRPH,
+  ];
+
   return (
-    <div className="space-y-4 rounded-lg border border-gray-300 p-6 bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Payment Summary */}
-      <div className="mb-6 pb-4 border-b border-gray-300">
-        <h3 className="text-lg font-bold text-gray-900 mb-3">💰 Payment Summary</h3>
-        <div className="space-y-2">
-          <div className="flex justify-between text-gray-700">
-            <span>Package:</span>
-            <span className="font-semibold">{packageType}</span>
-          </div>
-          <div className="flex justify-between text-gray-700">
-            <span>Amount:</span>
-            <span className="font-bold text-lg text-green-600">₱{amount.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Reference:</span>
-            <span className="font-mono text-xs bg-gray-200 px-2 py-1 rounded">
-              {confirmationNumber}
-            </span>
-          </div>
+    <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-5 text-gray-900 shadow-sm">
+      <div>
+        <h3 className="text-lg font-bold">Payment Summary</h3>
+        <div className="mt-3 space-y-1 text-sm">
+          <p><span className="font-semibold">Package:</span> {packageType}</p>
+          <p><span className="font-semibold">Amount:</span> ₱{amount.toLocaleString()}</p>
+          <p><span className="font-semibold">Reference:</span> {confirmationNumber}</p>
         </div>
       </div>
 
-      {/* Payment Method Selection */}
       <div>
-        <label className="block text-sm font-bold text-gray-900 mb-3">
-          📱 Select Payment Method
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {[PAYMENT_METHODS.GCASH, PAYMENT_METHODS.MAYA].map((method) => (
+        <p className="mb-3 text-sm font-semibold">Select Payment Method</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {paymentMethods.map((method) => (
             <button
               key={method}
               type="button"
-              onClick={() => setSelectedMethod(method as PaymentMethod)}
-              disabled={isProcessing}
-              className={`relative p-4 rounded-lg border-2 transition-all font-semibold ${
+              onClick={() => setSelectedMethod(method)}
+              disabled={isProcessing || !!qrImageUrl}
+              className={`rounded-xl border-2 p-4 text-sm font-semibold transition-all ${
                 selectedMethod === method
-                  ? 'border-blue-500 bg-blue-50 text-blue-900'
-                  : 'border-gray-300 bg-white text-gray-900 hover:border-blue-300'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  ? "border-blue-500 bg-blue-50 text-blue-900"
+                  : "border-gray-300 bg-white text-gray-900 hover:border-blue-300"
+              } disabled:cursor-not-allowed disabled:opacity-60`}
             >
-              {getPaymentMethodLabel(method as PaymentMethod)}
-              {selectedMethod === method && (
-                <span className="absolute top-2 right-2 text-blue-500">✓</span>
-              )}
+              {getPaymentMethodLabel(method)} {selectedMethod === method ? "✓" : ""}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-          <p className="text-red-800 text-sm font-semibold">❌ {error}</p>
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          ❌ {error}
         </div>
       )}
 
-      {/* Success Message */}
-      {success && (
-        <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-          <p className="text-green-800 text-sm font-semibold">
-            ✓ Payment processed successfully! You will receive a confirmation email shortly.
+      {qrImageUrl && (
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 text-center">
+          <h4 className="font-bold">Scan QR Ph to Pay</h4>
+          <p className="mt-1 text-sm text-gray-600">
+            Open your bank app, GCash, Maya, or other QR Ph-supported wallet and scan this code.
+          </p>
+          <img
+            src={qrImageUrl}
+            alt="QR Ph payment code"
+            className="mx-auto mt-4 h-64 w-64 rounded-xl border bg-white p-3 object-contain"
+          />
+          <p className="mt-3 text-xs text-gray-500">
+            Payment ID: {paymentId}. QR Ph codes usually expire after 30 minutes.
           </p>
         </div>
       )}
 
-      {/* Disclaimer */}
-      <div className="text-xs text-gray-600 bg-gray-100 rounded p-3">
-        <p>
-          💡 <strong>Note:</strong> You will be redirected to the payment gateway to complete your transaction securely.
-          Please ensure you have sufficient balance in your selected payment method.
-        </p>
-      </div>
+      {success && !qrImageUrl && (
+        <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-700">
+          ✓ Payment processed successfully!
+        </div>
+      )}
 
-      {/* Pay Button */}
       {!success && (
         <button
           type="button"
           onClick={handlePayment}
-          disabled={!selectedMethod || isProcessing}
-          className={`w-full py-3 rounded-lg font-bold text-white transition-all ${
-            selectedMethod && !isProcessing
-              ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 cursor-pointer'
-              : 'bg-gray-400 cursor-not-allowed'
-          }`}
+          disabled={isProcessing || !selectedMethod}
+          className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isProcessing ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⏳</span> Processing...
-            </span>
-          ) : (
-            `Pay ₱${amount.toLocaleString()}`
-          )}
+          {isProcessing ? "Processing..." : `Pay ₱${amount.toLocaleString()}`}
         </button>
       )}
     </div>
