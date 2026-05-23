@@ -14,7 +14,7 @@ function getSystemMessage(endedBy: EndedBy, agentName?: string | null) {
     return "No response received. This chat has been ended automatically.";
   }
 
-  return "Client ended the chat. Chat disabled.";
+  return "Client ended the chat. Thank you for contacting support.";
 }
 
 export async function POST(req: Request) {
