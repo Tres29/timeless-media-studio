@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MessageCircle, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 type Message = {
@@ -30,6 +32,20 @@ function TypingDots() {
 }
 
 export default function LiveChatWidget() {
+  const pathname = usePathname();
+
+  const hideWidgetRoutes = [
+    "/admin",
+    "/dashboard",
+    "/customer-service",
+    "/customer-service-dashboard",
+    "/agent-dashboard",
+  ];
+
+  const shouldHideWidget = hideWidgetRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState("");
   const [name, setName] = useState("");
@@ -41,6 +57,8 @@ export default function LiveChatWidget() {
   const [agentTyping, setAgentTyping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  if (shouldHideWidget) return null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,9 +73,7 @@ export default function LiveChatWidget() {
 
     const res = await fetch("/api/live-chat/start", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: name.trim(),
         email: email.trim() || null,
@@ -219,12 +235,14 @@ export default function LiveChatWidget() {
   }, [conversationId]);
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 font-sans">
+    <div className="fixed bottom-4 right-4 z-50 font-sans sm:bottom-5 sm:right-5">
       {open && (
-        <div className="mb-3 w-[340px] overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl">
+        <div className="mb-3 max-h-[82vh] w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl sm:w-[380px] md:w-[420px]">
           <div className="bg-black p-4 text-white">
-            <h3 className="text-lg font-bold">Timeless Studio Live Chat Support</h3>
-            <p className="text-sm text-zinc-300">
+            <h3 className="text-base font-bold sm:text-lg">
+              Timeless Studio Live Chat Support
+            </h3>
+            <p className="text-xs text-zinc-300 sm:text-sm">
               Message our customer service team for assistance.
             </p>
           </div>
@@ -232,14 +250,14 @@ export default function LiveChatWidget() {
           {!conversationId ? (
             <div className="space-y-3 p-4">
               <input
-                className="w-full rounded-xl border border-zinc-300 p-3 text-black outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-black outline-none focus:border-black sm:text-base"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
 
               <input
-                className="w-full rounded-xl border border-zinc-300 p-3 text-black outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-black outline-none focus:border-black sm:text-base"
                 placeholder="Email optional"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -248,14 +266,14 @@ export default function LiveChatWidget() {
               <button
                 onClick={startChat}
                 disabled={loading}
-                className="w-full rounded-xl bg-black p-3 font-semibold text-white transition hover:scale-[1.02] disabled:opacity-60"
+                className="w-full rounded-xl bg-black p-3 text-sm font-semibold text-white transition hover:scale-[1.02] disabled:opacity-60 sm:text-base"
               >
                 {loading ? "Starting..." : "Start Chat"}
               </button>
             </div>
           ) : (
-            <div className="p-4">
-              <div className="h-72 space-y-2 overflow-y-auto rounded-2xl bg-zinc-50 p-3 text-sm">
+            <div className="p-3 sm:p-4">
+              <div className="h-[48vh] max-h-[360px] min-h-[280px] space-y-2 overflow-y-auto rounded-2xl bg-zinc-50 p-3 text-sm sm:h-80">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
@@ -272,7 +290,7 @@ export default function LiveChatWidget() {
                           : "bg-zinc-200 text-black"
                       }`}
                     >
-                      <p className="text-sm break-words">
+                      <p className="break-words text-sm">
                         <span className="font-semibold">
                           {msg.sender_name ||
                             (msg.sender_type === "agent"
@@ -293,14 +311,13 @@ export default function LiveChatWidget() {
                 ))}
 
                 {agentTyping && !chatClosed && <TypingDots />}
-
                 <div ref={messagesEndRef} />
               </div>
 
               <div className="mt-3 flex gap-2">
                 <input
                   disabled={chatClosed}
-                  className="flex-1 rounded-xl border border-zinc-300 p-3 text-black outline-none focus:border-black disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 p-3 text-sm text-black outline-none focus:border-black disabled:opacity-50 sm:text-base"
                   value={text}
                   onChange={(e) => updateTyping(e.target.value)}
                   onKeyDown={(e) => {
@@ -312,7 +329,7 @@ export default function LiveChatWidget() {
                 <button
                   onClick={sendMessage}
                   disabled={chatClosed}
-                  className="rounded-xl bg-black px-4 text-white transition hover:scale-105 disabled:opacity-50"
+                  className="rounded-xl bg-black px-4 text-sm text-white transition hover:scale-105 disabled:opacity-50 sm:text-base"
                 >
                   Send
                 </button>
@@ -346,9 +363,10 @@ export default function LiveChatWidget() {
 
       <button
         onClick={() => setOpen(!open)}
-        className="rounded-full bg-black px-6 py-4 font-semibold text-white shadow-xl transition hover:scale-105"
+        aria-label={open ? "Close live chat" : "Open live chat"}
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white shadow-xl transition hover:scale-105 sm:h-16 sm:w-16"
       >
-        {open ? "Close" : "Chat"}
+        {open ? <X size={26} /> : <MessageCircle size={28} />}
       </button>
     </div>
   );

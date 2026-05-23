@@ -84,8 +84,9 @@ export default function CustomerServiceDashboard() {
   const [bookingResults, setBookingResults] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [isEditingBooking, setIsEditingBooking] = useState(false);
+
   const [bookingStatus, setBookingStatus] = useState<BookingStatus>("pending");
-  const [bookingDate, setBookingDate] = useState("");
   const [bookingPackage, setBookingPackage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
 
@@ -220,6 +221,7 @@ export default function CustomerServiceDashboard() {
     setBookingLoading(true);
     setBookingResults([]);
     setSelectedBooking(null);
+    setIsEditingBooking(false);
 
     let request = supabaseBrowser.from("bookings").select("*");
 
@@ -246,9 +248,9 @@ export default function CustomerServiceDashboard() {
   function selectBooking(booking: Booking) {
     setSelectedBooking(booking);
     setBookingStatus(booking.status);
-    setBookingDate(booking.date || "");
     setBookingPackage(booking.package_type || "");
     setBookingMessage(booking.message || "");
+    setIsEditingBooking(false);
   }
 
   async function updateBooking() {
@@ -258,7 +260,6 @@ export default function CustomerServiceDashboard() {
       .from("bookings")
       .update({
         status: bookingStatus,
-        date: bookingDate,
         package_type: bookingPackage,
         message: bookingMessage,
       })
@@ -269,21 +270,27 @@ export default function CustomerServiceDashboard() {
       return;
     }
 
-    alert("Booking updated.");
-
-    setSelectedBooking({
+    const updatedBooking = {
       ...selectedBooking,
       status: bookingStatus,
-      date: bookingDate,
       package_type: bookingPackage,
       message: bookingMessage,
-    });
+    };
 
+    setSelectedBooking(updatedBooking);
+    setIsEditingBooking(false);
+    alert("Reservation updated.");
     searchBooking();
   }
 
   async function cancelBooking() {
     if (!selectedBooking) return;
+
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this reservation?"
+    );
+
+    if (!confirmCancel) return;
 
     const { error } = await supabaseBrowser
       .from("bookings")
@@ -297,14 +304,35 @@ export default function CustomerServiceDashboard() {
       return;
     }
 
-    alert("Booking cancelled.");
+    const emailRes = await fetch("/api/bookings/cancel-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: selectedBooking.name,
+        email: selectedBooking.email,
+        phone: selectedBooking.phone,
+        date: selectedBooking.date,
+        packageType: selectedBooking.package_type,
+        message: selectedBooking.message || "",
+        confirmationNumber: selectedBooking.confirmation_number,
+        status: "cancelled",
+      }),
+    });
+
+    if (!emailRes.ok) {
+      alert("Reservation cancelled, but email failed to send.");
+    } else {
+      alert("Reservation cancelled. Email confirmation sent.");
+    }
 
     setBookingStatus("cancelled");
     setSelectedBooking({
       ...selectedBooking,
       status: "cancelled",
     });
-
+    setIsEditingBooking(false);
     searchBooking();
   }
 
@@ -487,17 +515,17 @@ export default function CustomerServiceDashboard() {
   }, [active, messages]);
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-6 text-white">
-      <div className="flex items-center justify-between">
+    <main className="min-h-screen bg-zinc-950 p-4 text-white sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Front Desk </h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">Front Desk</h1>
           <p className="text-zinc-400">Timeless Studio Client Chat</p>
           <p className="mt-1 text-sm text-zinc-500">Logged in as: {agentName}</p>
         </div>
 
         <button
           onClick={logout}
-          className="rounded-xl bg-red-600 px-4 py-2 font-semibold"
+          className="w-fit rounded-xl bg-red-600 px-4 py-2 font-semibold"
         >
           Logout
         </button>
@@ -548,12 +576,13 @@ export default function CustomerServiceDashboard() {
         <section className="rounded-3xl bg-zinc-900 p-4">
           {active ? (
             <>
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex flex-col gap-4 border-b border-zinc-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-bold">{active.customer_name}</h2>
                   <p className="text-sm text-zinc-400">
                     {active.customer_email || "No email"}
                   </p>
+
                   {active.status === "closed" && (
                     <p className="mt-1 text-sm font-medium text-red-400">
                       This chat has ended.
@@ -564,13 +593,13 @@ export default function CustomerServiceDashboard() {
                 <button
                   onClick={closeChat}
                   disabled={active.status === "closed"}
-                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                  className="w-fit rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
                 >
                   Close Chat
                 </button>
               </div>
 
-              <div className="mt-4 h-[500px] space-y-2 overflow-y-auto rounded-2xl bg-zinc-950 p-4">
+              <div className="mt-4 h-[420px] space-y-2 overflow-y-auto rounded-2xl bg-zinc-950 p-4 sm:h-[500px]">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
@@ -579,7 +608,7 @@ export default function CustomerServiceDashboard() {
                     }
                   >
                     <div
-                      className={`inline-block max-w-[80%] rounded-2xl px-4 py-3 text-left ${
+                      className={`inline-block max-w-[85%] rounded-2xl px-4 py-3 text-left sm:max-w-[80%] ${
                         msg.sender_type === "agent"
                           ? "bg-white text-black"
                           : msg.sender_type === "system"
@@ -587,7 +616,7 @@ export default function CustomerServiceDashboard() {
                           : "bg-zinc-800 text-white"
                       }`}
                     >
-                      <p className="text-sm break-words">
+                      <p className="break-words text-sm">
                         <span className="font-semibold">
                           {msg.sender_name ||
                             (msg.sender_type === "agent"
@@ -615,7 +644,7 @@ export default function CustomerServiceDashboard() {
               <div className="mt-4 flex gap-2">
                 <input
                   disabled={active.status === "closed"}
-                  className="flex-1 rounded-xl bg-zinc-800 p-3 outline-none disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-xl bg-zinc-800 p-3 outline-none disabled:opacity-50"
                   value={text}
                   onChange={(e) => updateAgentTyping(e.target.value)}
                   onKeyDown={(e) => {
@@ -631,23 +660,28 @@ export default function CustomerServiceDashboard() {
                 <button
                   onClick={sendMessage}
                   disabled={active.status === "closed"}
-                  className="rounded-xl bg-white px-6 font-semibold text-black disabled:opacity-50"
+                  className="rounded-xl bg-white px-5 font-semibold text-black disabled:opacity-50 sm:px-6"
                 >
                   Send
                 </button>
               </div>
 
               <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-950 p-4">
-                <h3 className="text-lg font-bold">Booking / Reservation Tracker</h3>
+                <h3 className="text-lg font-bold">
+                  Booking / Reservation Tracker
+                </h3>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Pull up client booking by email, phone, or confirmation number.
+                  Pull up customer booking by email, phone, or confirmation
+                  number.
                 </p>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
                   <select
                     value={trackerMode}
                     onChange={(e) =>
-                      setTrackerMode(e.target.value as "contact" | "confirmation")
+                      setTrackerMode(
+                        e.target.value as "contact" | "confirmation"
+                      )
                     }
                     className="rounded-xl bg-zinc-800 p-3 outline-none"
                   >
@@ -661,14 +695,15 @@ export default function CustomerServiceDashboard() {
                     className="rounded-xl bg-zinc-800 p-3 outline-none"
                     placeholder={
                       trackerMode === "contact"
-                        ? "Enter client email or phone"
+                        ? "Enter customer email or phone"
                         : "Enter confirmation number"
                     }
                   />
 
                   <button
                     onClick={searchBooking}
-                    className="rounded-xl bg-white px-5 font-semibold text-black"
+                    disabled={bookingLoading}
+                    className="rounded-xl bg-white px-5 py-3 font-semibold text-black disabled:opacity-50"
                   >
                     {bookingLoading ? "Searching..." : "Search"}
                   </button>
@@ -677,24 +712,27 @@ export default function CustomerServiceDashboard() {
                 {bookingResults.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <p className="text-sm font-semibold text-zinc-300">
-                      Select a booking:
+                      Select a reservation:
                     </p>
 
                     {bookingResults.map((booking) => (
                       <button
                         key={booking.id}
                         onClick={() => selectBooking(booking)}
-                        className="w-full rounded-2xl bg-zinc-800 p-4 text-left hover:bg-zinc-700"
+                        className="w-full rounded-2xl bg-zinc-800 p-4 text-left transition hover:bg-zinc-700"
                       >
                         <p className="font-semibold">
                           {booking.name} — {booking.confirmation_number}
                         </p>
+
                         <p className="text-sm text-zinc-400">
                           {booking.email} | {booking.phone}
                         </p>
+
                         <p className="text-sm text-zinc-400">
                           {booking.package_type} | {booking.date}
                         </p>
+
                         <span className="mt-2 inline-block rounded-full bg-zinc-700 px-3 py-1 text-xs">
                           {booking.status}
                         </span>
@@ -703,97 +741,164 @@ export default function CustomerServiceDashboard() {
                   </div>
                 )}
 
-                {bookingResults.length === 0 && trackerQuery && !bookingLoading && (
-                  <p className="mt-4 text-sm text-zinc-500">
-                    No booking selected or no result found.
-                  </p>
-                )}
+                {bookingResults.length === 0 &&
+                  trackerQuery &&
+                  !bookingLoading && (
+                    <p className="mt-4 text-sm text-zinc-500">
+                      No reservation selected or no result found.
+                    </p>
+                  )}
 
                 {selectedBooking && (
                   <div className="mt-5 rounded-2xl bg-zinc-900 p-4">
-                    <h4 className="font-bold">Booking Details</h4>
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-xs text-zinc-500">Client Name</p>
-                        <p>{selectedBooking.name}</p>
+                        <h4 className="font-bold">Reservation Details</h4>
+                        <p className="text-sm text-zinc-500">
+                          Confirmation #:{" "}
+                          {selectedBooking.confirmation_number}
+                        </p>
                       </div>
 
+                      <span className="w-fit rounded-full bg-zinc-700 px-3 py-1 text-xs">
+                        {selectedBooking.status}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <div>
-                        <p className="text-xs text-zinc-500">Confirmation #</p>
-                        <p>{selectedBooking.confirmation_number}</p>
+                        <p className="text-xs text-zinc-500">Name</p>
+                        <p className="font-medium">{selectedBooking.name}</p>
                       </div>
 
                       <div>
                         <p className="text-xs text-zinc-500">Email</p>
-                        <p>{selectedBooking.email}</p>
+                        <p className="font-medium break-words">
+                          {selectedBooking.email}
+                        </p>
                       </div>
 
                       <div>
-                        <p className="text-xs text-zinc-500">Phone</p>
-                        <p>{selectedBooking.phone}</p>
+                        <p className="text-xs text-zinc-500">Phone Number</p>
+                        <p className="font-medium">{selectedBooking.phone}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-zinc-500">
+                          Date of Reservation
+                        </p>
+                        <p className="font-medium">{selectedBooking.date}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-zinc-500">
+                          Package Selected
+                        </p>
+                        <p className="font-medium">
+                          {selectedBooking.package_type}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-zinc-500">Status</p>
+                        <p className="font-medium">{selectedBooking.status}</p>
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div>
-                        <label className="text-xs text-zinc-500">Status</label>
-                        <select
-                          value={bookingStatus}
-                          onChange={(e) =>
-                            setBookingStatus(e.target.value as BookingStatus)
-                          }
-                          className="mt-1 w-full rounded-xl bg-zinc-800 p-3 outline-none"
+                    {selectedBooking.message && (
+                      <div className="mt-4">
+                        <p className="text-xs text-zinc-500">Message</p>
+                        <p className="rounded-xl bg-zinc-800 p-3 text-sm">
+                          {selectedBooking.message}
+                        </p>
+                      </div>
+                    )}
+
+                    {isEditingBooking && (
+                      <div className="mt-5 grid gap-3">
+                        <div>
+                          <label className="text-xs text-zinc-500">
+                            Status
+                          </label>
+
+                          <select
+                            value={bookingStatus}
+                            onChange={(e) =>
+                              setBookingStatus(
+                                e.target.value as BookingStatus
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl bg-zinc-800 p-3 outline-none"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="in_process">In Process</option>
+                            <option value="for_pick_up">For Pick Up</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-zinc-500">
+                            Package Selected
+                          </label>
+
+                          <input
+                            value={bookingPackage}
+                            onChange={(e) =>
+                              setBookingPackage(e.target.value)
+                            }
+                            className="mt-1 w-full rounded-xl bg-zinc-800 p-3 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-zinc-500">
+                            Message
+                          </label>
+
+                          <textarea
+                            value={bookingMessage}
+                            onChange={(e) =>
+                              setBookingMessage(e.target.value)
+                            }
+                            className="mt-1 min-h-24 w-full rounded-xl bg-zinc-800 p-3 outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                      {!isEditingBooking ? (
+                        <button
+                          onClick={() => setIsEditingBooking(true)}
+                          disabled={selectedBooking.status === "cancelled"}
+                          className="rounded-xl bg-white px-5 py-3 font-semibold text-black disabled:opacity-50"
                         >
-                          <option value="pending">Pending</option>
-                          <option value="approved">Approved</option>
-                          <option value="in_process">In Process</option>
-                          <option value="for_pick_up">For Pick Up</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                      </div>
+                          Update Reservation
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={updateBooking}
+                            className="rounded-xl bg-white px-5 py-3 font-semibold text-black"
+                          >
+                            Save Changes
+                          </button>
 
-                      <div>
-                        <label className="text-xs text-zinc-500">Date</label>
-                        <input
-                          type="date"
-                          value={bookingDate}
-                          onChange={(e) => setBookingDate(e.target.value)}
-                          className="mt-1 w-full rounded-xl bg-zinc-800 p-3 outline-none"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="text-xs text-zinc-500">Package</label>
-                        <input
-                          value={bookingPackage}
-                          onChange={(e) => setBookingPackage(e.target.value)}
-                          className="mt-1 w-full rounded-xl bg-zinc-800 p-3 outline-none"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="text-xs text-zinc-500">Message</label>
-                        <textarea
-                          value={bookingMessage}
-                          onChange={(e) => setBookingMessage(e.target.value)}
-                          className="mt-1 min-h-24 w-full rounded-xl bg-zinc-800 p-3 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        onClick={updateBooking}
-                        className="rounded-xl bg-white px-5 py-3 font-semibold text-black"
-                      >
-                        Update Reservation
-                      </button>
+                          <button
+                            onClick={() => setIsEditingBooking(false)}
+                            className="rounded-xl bg-zinc-700 px-5 py-3 font-semibold text-white"
+                          >
+                            Cancel Edit
+                          </button>
+                        </>
+                      )}
 
                       <button
                         onClick={cancelBooking}
-                        disabled={bookingStatus === "cancelled"}
+                        disabled={selectedBooking.status === "cancelled"}
                         className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
                       >
                         Cancel Reservation
