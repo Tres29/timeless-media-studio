@@ -7,11 +7,38 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 
 type Message = {
   id: string;
+  conversation_id?: string;
   sender_type: "client" | "agent" | "system";
   sender_name: string | null;
   message: string;
   created_at: string;
 };
+
+type ConversationStatus = {
+  status: "waiting" | "open" | "closed" | string;
+  ended_by?: "client" | "agent" | "system" | string | null;
+  assigned_agent_name?: string | null;
+};
+
+type ClientNeed = "Cancellation" | "Inquiry" | "General Inquiry" | "Live Agent";
+
+
+function uniqueMessages(messages: Message[]) {
+  const seen = new Set<string>();
+  return messages.filter((message) => {
+    const key = message.id || `${message.conversation_id}-${message.sender_type}-${message.created_at}-${message.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const clientNeeds: ClientNeed[] = [
+  "Cancellation",
+  "Inquiry",
+  "General Inquiry",
+  "Live Agent",
+];
 
 function formatTime(date: string) {
   return new Date(date).toLocaleTimeString([], {
@@ -23,7 +50,7 @@ function formatTime(date: string) {
 
 function TypingDots() {
   return (
-    <div className="mt-2 flex items-center gap-1 px-2">
+    <div className="mt-2 flex items-center gap-1 px-2" aria-label="Agent is typing">
       <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400" />
       <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:150ms]" />
       <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:300ms]" />
@@ -42,34 +69,46 @@ export default function LiveChatWidget() {
     "/agent-dashboard",
   ];
 
-  const shouldHideWidget = hideWidgetRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const shouldHideWidget = hideWidgetRoutes.some((route) => pathname.startsWith(route));
 
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [selectedNeed, setSelectedNeed] = useState<ClientNeed | "">("");
   const [text, setText] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [chatClosed, setChatClosed] = useState(false);
+  const [endedBy, setEndedBy] = useState<string | null>(null);
+  const [assignedAgentName, setAssignedAgentName] = useState<string | null>(null);
   const [agentTyping, setAgentTyping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  if (shouldHideWidget) return null;
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, agentTyping]);
+  }, [messages, agentTyping, chatClosed]);
+
+  function markChatClosed(status?: ConversationStatus | null) {
+    setChatClosed(true);
+    setText("");
+    setAgentTyping(false);
+    setEndedBy(status?.ended_by || "agent");
+    if (status?.assigned_agent_name) setAssignedAgentName(status.assigned_agent_name);
+  }
 
   async function startChat() {
     if (!name.trim()) return alert("Please enter your name.");
+    if (!selectedNeed) return alert("Please choose what you need help with.");
 
     setLoading(true);
     setChatClosed(false);
+    setEndedBy(null);
+    setAssignedAgentName(null);
     setMessages([]);
+    setText("");
+    setAgentTyping(false);
 
     const res = await fetch("/api/live-chat/start", {
       method: "POST",
@@ -77,14 +116,15 @@ export default function LiveChatWidget() {
       body: JSON.stringify({
         name: name.trim(),
         email: email.trim() || null,
+        need: selectedNeed,
       }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
     setLoading(false);
 
     if (!res.ok) {
-      alert(data.error || "Failed to start chat.");
+      alert(data?.error || "Failed to start chat.");
       return;
     }
 
@@ -108,6 +148,17 @@ export default function LiveChatWidget() {
   async function sendMessage() {
     if (!text.trim() || !conversationId || chatClosed) return;
 
+    const { data: current } = await supabaseBrowser
+      .from("chat_conversations")
+      .select("status, ended_by, assigned_agent_name")
+      .eq("id", conversationId)
+      .single();
+
+    if ((current as ConversationStatus | null)?.status === "closed") {
+      markChatClosed(current as ConversationStatus);
+      return;
+    }
+
     const messageText = text.trim();
     setText("");
 
@@ -130,24 +181,24 @@ export default function LiveChatWidget() {
   async function endChat() {
     if (!conversationId || chatClosed) return;
 
-    await supabaseBrowser.from("chat_messages").insert({
-      conversation_id: conversationId,
-      sender_type: "system",
-      sender_name: "System",
-      message: "Customer has ended the chat.",
+    const res = await fetch("/api/live-chat/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId,
+        endedBy: "client",
+        agentName: null,
+      }),
     });
 
-    await supabaseBrowser
-      .from("chat_conversations")
-      .update({
-        status: "closed",
-        ended_by: "client",
-        ended_at: new Date().toISOString(),
-      })
-      .eq("id", conversationId);
+    const data = await res.json().catch(() => null);
 
-    setChatClosed(true);
-    setText("");
+    if (!res.ok) {
+      alert(data?.error || "Failed to end chat.");
+      return;
+    }
+
+    markChatClosed(data.conversation as ConversationStatus);
   }
 
   function newSession() {
@@ -155,23 +206,43 @@ export default function LiveChatWidget() {
     setMessages([]);
     setText("");
     setChatClosed(false);
+    setEndedBy(null);
+    setAssignedAgentName(null);
     setAgentTyping(false);
+    setSelectedNeed("");
   }
 
   useEffect(() => {
     if (!conversationId) return;
 
-    supabaseBrowser
-      .from("chat_messages")
-      .select("*")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        setMessages((data as Message[]) || []);
-      });
+    let mounted = true;
+
+    async function loadConversation() {
+      const [{ data: messageData }, { data: conversationData }] = await Promise.all([
+        supabaseBrowser
+          .from("chat_messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true }),
+        supabaseBrowser
+          .from("chat_conversations")
+          .select("status, ended_by, assigned_agent_name")
+          .eq("id", conversationId)
+          .single(),
+      ]);
+
+      if (!mounted) return;
+
+      setMessages(uniqueMessages((messageData as Message[]) || []));
+      const status = conversationData as ConversationStatus | null;
+      if (status?.assigned_agent_name) setAssignedAgentName(status.assigned_agent_name);
+      if (status?.status === "closed") markChatClosed(status);
+    }
+
+    void loadConversation();
 
     const messageChannel = supabaseBrowser
-      .channel(`client-chat-${conversationId}`)
+      .channel(`client-chat-messages-${conversationId}`)
       .on(
         "postgres_changes",
         {
@@ -181,13 +252,16 @@ export default function LiveChatWidget() {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          setMessages((prev) => {
+            if (prev.some((message) => message.id === (payload.new as Message).id)) return prev;
+            return uniqueMessages([...prev, payload.new as Message]);
+          });
         }
       )
       .subscribe();
 
     const conversationChannel = supabaseBrowser
-      .channel(`conversation-status-${conversationId}`)
+      .channel(`client-chat-status-${conversationId}`)
       .on(
         "postgres_changes",
         {
@@ -197,15 +271,15 @@ export default function LiveChatWidget() {
           filter: `id=eq.${conversationId}`,
         },
         (payload) => {
-          if (payload.new.status === "closed") {
-            setChatClosed(true);
-          }
+          const updated = payload.new as ConversationStatus;
+          if (updated.assigned_agent_name) setAssignedAgentName(updated.assigned_agent_name);
+          if (updated.status === "closed") markChatClosed(updated);
         }
       )
       .subscribe();
 
     const typingChannel = supabaseBrowser
-      .channel(`client-typing-${conversationId}`)
+      .channel(`client-chat-typing-${conversationId}`)
       .on(
         "postgres_changes",
         {
@@ -215,33 +289,48 @@ export default function LiveChatWidget() {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          const typing = payload.new as {
-            sender_type: string;
-            is_typing: boolean;
-          };
-
-          if (typing.sender_type === "agent") {
-            setAgentTyping(typing.is_typing);
-          }
+          const typing = payload.new as { sender_type?: string; is_typing?: boolean };
+          if (typing.sender_type === "agent") setAgentTyping(Boolean(typing.is_typing));
         }
       )
       .subscribe();
 
+    const fallbackStatusCheck = window.setInterval(async () => {
+      const { data } = await supabaseBrowser
+        .from("chat_conversations")
+        .select("status, ended_by, assigned_agent_name")
+        .eq("id", conversationId)
+        .single();
+
+      const status = data as ConversationStatus | null;
+      if (status?.assigned_agent_name) setAssignedAgentName(status.assigned_agent_name);
+      if (status?.status === "closed") markChatClosed(status);
+    }, 4000);
+
     return () => {
+      mounted = false;
+      window.clearInterval(fallbackStatusCheck);
       supabaseBrowser.removeChannel(messageChannel);
       supabaseBrowser.removeChannel(conversationChannel);
       supabaseBrowser.removeChannel(typingChannel);
     };
   }, [conversationId]);
 
+  if (shouldHideWidget) return null;
+
+  const endedText =
+    endedBy === "agent"
+      ? "The agent ended this chat. Please start a new session if you still need help."
+      : endedBy === "system"
+        ? "This chat ended automatically because there was no client reply. Please start a new session if you still need help."
+        : "This chat session has ended. Please start a new session if you still need help.";
+
   return (
     <div className="fixed bottom-4 right-4 z-50 font-sans sm:bottom-5 sm:right-5">
       {open && (
         <div className="mb-3 max-h-[82vh] w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl sm:w-[380px] md:w-[420px]">
           <div className="bg-black p-4 text-white">
-            <h3 className="text-base font-bold sm:text-lg">
-              Timeless Studio Live Chat Support
-            </h3>
+            <h3 className="text-base font-bold sm:text-lg">Timeless Studio Live Chat Support</h3>
             <p className="text-xs text-zinc-300 sm:text-sm">
               Message our customer service team for assistance.
             </p>
@@ -263,6 +352,26 @@ export default function LiveChatWidget() {
                 onChange={(e) => setEmail(e.target.value)}
               />
 
+              <div>
+                <p className="mb-2 text-sm font-semibold text-zinc-800">Choose client need / help</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {clientNeeds.map((need) => (
+                    <button
+                      key={need}
+                      type="button"
+                      onClick={() => setSelectedNeed(need)}
+                      className={`rounded-xl border p-3 text-sm font-semibold transition ${
+                        selectedNeed === need
+                          ? "border-black bg-black text-white"
+                          : "border-zinc-300 bg-white text-zinc-800 hover:border-black"
+                      }`}
+                    >
+                      {need}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 onClick={startChat}
                 disabled={loading}
@@ -273,39 +382,36 @@ export default function LiveChatWidget() {
             </div>
           ) : (
             <div className="p-3 sm:p-4">
+              <div className="mb-3 rounded-2xl bg-zinc-100 p-3 text-xs text-zinc-700">
+                <p><strong>Client name:</strong> {name || "Client"}</p>
+                <p><strong>Need:</strong> {selectedNeed || "Live Agent"}</p>
+                <p><strong>Agent:</strong> {assignedAgentName || "Waiting for an agent"}</p>
+              </div>
+
               <div className="h-[48vh] max-h-[360px] min-h-[280px] space-y-2 overflow-y-auto rounded-2xl bg-zinc-50 p-3 text-sm sm:h-80">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={
-                      msg.sender_type === "client" ? "text-right" : "text-left"
-                    }
-                  >
+                {uniqueMessages(messages).map((msg, index) => (
+                  <div key={`${msg.id}-${msg.created_at}-${index}`} className={msg.sender_type === "client" ? "text-right" : "text-left"}>
                     <div
                       className={`inline-block max-w-[85%] rounded-2xl px-4 py-3 text-left ${
                         msg.sender_type === "client"
                           ? "bg-black text-white"
                           : msg.sender_type === "system"
-                          ? "bg-yellow-100 text-black"
-                          : "bg-zinc-200 text-black"
+                            ? "bg-yellow-100 text-black"
+                            : "bg-zinc-200 text-black"
                       }`}
                     >
                       <p className="break-words text-sm">
                         <span className="font-semibold">
-                          {msg.sender_name ||
-                            (msg.sender_type === "agent"
-                              ? "Agent"
-                              : msg.sender_type === "system"
+                          {msg.sender_type === "agent"
+                            ? `Agent${msg.sender_name ? `: ${msg.sender_name}` : ""}`
+                            : msg.sender_type === "system"
                               ? "System"
-                              : name)}
-                          :
+                              : `Client: ${msg.sender_name || name || "Client"}`}
                         </span>{" "}
                         {msg.message}
                       </p>
 
-                      <p className="mt-1 text-[10px] opacity-70">
-                        {formatTime(msg.created_at)}
-                      </p>
+                      <p className="mt-1 text-[10px] opacity-70">{formatTime(msg.created_at)}</p>
                     </div>
                   </div>
                 ))}
@@ -317,41 +423,35 @@ export default function LiveChatWidget() {
               <div className="mt-3 flex gap-2">
                 <input
                   disabled={chatClosed}
-                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 p-3 text-sm text-black outline-none focus:border-black disabled:opacity-50 sm:text-base"
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 p-3 text-sm text-black outline-none focus:border-black disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
                   value={text}
                   onChange={(e) => updateTyping(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") sendMessage();
+                    if (e.key === "Enter") void sendMessage();
                   }}
                   placeholder={chatClosed ? "Chat has ended" : "Type message..."}
                 />
 
                 <button
                   onClick={sendMessage}
-                  disabled={chatClosed}
-                  className="rounded-xl bg-black px-4 text-sm text-white transition hover:scale-105 disabled:opacity-50 sm:text-base"
+                  disabled={chatClosed || !text.trim()}
+                  className="rounded-xl bg-black px-4 text-sm text-white transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
                 >
                   Send
                 </button>
               </div>
 
               {!chatClosed ? (
-                <button
-                  onClick={endChat}
-                  className="mt-3 w-full rounded-xl bg-red-600 p-3 text-sm font-semibold text-white"
-                >
+                <button onClick={endChat} className="mt-3 w-full rounded-xl bg-red-600 p-3 text-sm font-semibold text-white">
                   End Chat
                 </button>
               ) : (
                 <>
-                  <p className="mt-3 text-center text-sm font-medium text-red-500">
-                    This chat session has ended.
+                  <p className="mt-3 rounded-2xl bg-red-50 p-3 text-center text-sm font-medium text-red-600">
+                    {endedText}
                   </p>
 
-                  <button
-                    onClick={newSession}
-                    className="mt-3 w-full rounded-xl bg-black p-3 text-sm font-semibold text-white"
-                  >
+                  <button onClick={newSession} className="mt-3 w-full rounded-xl bg-black p-3 text-sm font-semibold text-white">
                     New Session
                   </button>
                 </>
