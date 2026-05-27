@@ -536,6 +536,23 @@ export default function CustomerServiceDashboard() {
     const message = replyText.trim();
     setReplyText("");
 
+    if (selectedConversation.status === "waiting" || !selectedConversation.assigned_agent_name) {
+      const { data: reassigned } = await supabaseBrowser
+        .from("chat_conversations")
+        .update({
+          status: "open",
+          assigned_agent_name: agentName,
+          assigned_agent_id: agentName,
+        })
+        .eq("id", selectedConversation.id)
+        .select("*")
+        .single();
+
+      if (reassigned) {
+        setSelectedConversation(reassigned as ChatConversation);
+      }
+    }
+
     await supabaseBrowser.from("chat_typing").upsert({
       conversation_id: selectedConversation.id,
       sender_type: "agent",
@@ -552,6 +569,7 @@ export default function CustomerServiceDashboard() {
     });
 
     if (error) alert(error.message);
+    await loadConversations();
     setSendingReply(false);
   }
 
@@ -868,7 +886,7 @@ export default function CustomerServiceDashboard() {
                     </div>
                     <p className="mt-1 truncate text-sm text-neutral-400">{conversation.customer_email || "No email"}</p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      {conversation.assigned_agent_name ? `Assigned to ${conversation.assigned_agent_name}` : "Unassigned"}
+                      {conversation.assigned_agent_name ? `Assigned to ${conversation.assigned_agent_name}` : conversation.status === "open" ? "Assigned" : "Unassigned"}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">{new Date(conversation.created_at).toLocaleString()}</p>
                   </button>

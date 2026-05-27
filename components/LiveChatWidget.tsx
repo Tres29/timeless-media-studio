@@ -84,6 +84,13 @@ export default function LiveChatWidget() {
   const [assignedAgentName, setAssignedAgentName] = useState<string | null>(null);
   const [agentTyping, setAgentTyping] = useState(false);
 
+  const detectedAgentName = messages
+    .filter((message) => message.sender_type === "agent" && message.sender_name)
+    .map((message) => message.sender_name?.trim())
+    .find((senderName): senderName is string => Boolean(senderName));
+
+  const displayAgentName = assignedAgentName || detectedAgentName || null;
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -385,7 +392,7 @@ export default function LiveChatWidget() {
               <div className="mb-3 rounded-2xl bg-zinc-100 p-3 text-xs text-zinc-700">
                 <p><strong>Client name:</strong> {name || "Client"}</p>
                 <p><strong>Need:</strong> {selectedNeed || "Live Agent"}</p>
-                <p><strong>Agent:</strong> {assignedAgentName || "Waiting for an agent"}</p>
+                <p><strong>Agent:</strong> {displayAgentName || "Waiting for an agent"}</p>
               </div>
 
               <div className="h-[48vh] max-h-[360px] min-h-[280px] space-y-2 overflow-y-auto rounded-2xl bg-zinc-50 p-3 text-sm sm:h-80">
@@ -403,7 +410,7 @@ export default function LiveChatWidget() {
                       <p className="break-words text-sm">
                         <span className="font-semibold">
                           {msg.sender_type === "agent"
-                            ? `Agent${msg.sender_name ? `: ${msg.sender_name}` : ""}`
+                            ? `Agent${msg.sender_name ? `: ${msg.sender_name}` : displayAgentName ? `: ${displayAgentName}` : ""}`
                             : msg.sender_type === "system"
                               ? "System"
                               : `Client: ${msg.sender_name || name || "Client"}`}
