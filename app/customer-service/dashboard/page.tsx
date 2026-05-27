@@ -181,6 +181,16 @@ function buildAiSummary(conversation: ChatConversation | null, messages: ChatMes
   return { clientRequest, conversationSummary, agentActions, resolution };
 }
 
+
+function mergeConversationState(
+  conversations: ChatConversation[],
+  updated: ChatConversation
+) {
+  return conversations.map((conversation) =>
+    conversation.id === updated.id ? { ...conversation, ...updated } : conversation
+  );
+}
+
 function formatTime(date: string) {
   return new Date(date).toLocaleTimeString([], {
     hour: "2-digit",
@@ -348,6 +358,7 @@ export default function CustomerServiceDashboard() {
 
       if (data) currentConversation = data as ChatConversation;
       setSelectedConversation(currentConversation);
+      setConversations((prev) => mergeConversationState(prev, currentConversation));
 
       const { data: existingJoinMessage } = await supabaseBrowser
         .from("chat_messages")
@@ -536,6 +547,29 @@ export default function CustomerServiceDashboard() {
     const message = replyText.trim();
     setReplyText("");
 
+    if (selectedConversation.status === "waiting" || !selectedConversation.assigned_agent_name) {
+      const { data: reassigned, error: assignError } = await supabaseBrowser
+        .from("chat_conversations")
+        .update({
+          status: "open",
+          assigned_agent_name: agentName,
+          assigned_agent_id: agentName,
+        })
+        .eq("id", selectedConversation.id)
+        .select("*")
+        .single();
+
+      if (assignError) {
+        console.error("Failed to assign waiting chat before reply:", assignError);
+      }
+
+      if (reassigned) {
+        const updatedConversation = reassigned as ChatConversation;
+        setSelectedConversation(updatedConversation);
+        setConversations((prev) => mergeConversationState(prev, updatedConversation));
+      }
+    }
+
     await supabaseBrowser.from("chat_typing").upsert({
       conversation_id: selectedConversation.id,
       sender_type: "agent",
@@ -552,6 +586,21 @@ export default function CustomerServiceDashboard() {
     });
 
     if (error) alert(error.message);
+    if (!error) {
+      setConversations((prev) =>
+        prev.map((conversation) =>
+          conversation.id === selectedConversation.id
+            ? {
+                ...conversation,
+                status: "open",
+                assigned_agent_name: conversation.assigned_agent_name || agentName,
+                assigned_agent_id: conversation.assigned_agent_id || agentName,
+              }
+            : conversation
+        )
+      );
+    }
+    await loadConversations();
     setSendingReply(false);
   }
 
@@ -868,7 +917,7 @@ export default function CustomerServiceDashboard() {
                     </div>
                     <p className="mt-1 truncate text-sm text-neutral-400">{conversation.customer_email || "No email"}</p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      {conversation.assigned_agent_name ? `Assigned to ${conversation.assigned_agent_name}` : "Unassigned"}
+                      {conversation.assigned_agent_name ? `Assigned to ${conversation.assigned_agent_name}` : conversation.status === "open" ? "Assigned" : "Unassigned"}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">{new Date(conversation.created_at).toLocaleString()}</p>
                   </button>
