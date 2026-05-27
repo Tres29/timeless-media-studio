@@ -548,7 +548,10 @@ export default function CustomerServiceDashboard() {
     setReplyText("");
 
     if (selectedConversation.status === "waiting" || !selectedConversation.assigned_agent_name) {
+
       const { data: reassigned, error: assignError } = await supabaseBrowser
+
+      const { data: reassigned } = await supabaseBrowser
         .from("chat_conversations")
         .update({
           status: "open",
@@ -567,6 +570,9 @@ export default function CustomerServiceDashboard() {
         const updatedConversation = reassigned as ChatConversation;
         setSelectedConversation(updatedConversation);
         setConversations((prev) => mergeConversationState(prev, updatedConversation));
+
+      if (reassigned) {
+        setSelectedConversation(reassigned as ChatConversation);
       }
     }
 
